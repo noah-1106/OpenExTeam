@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #FAFAF8;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #F5F4F0;
+  --color-border: #E8E6E1;
+  --color-border-subtle: #F0EEE9;
+  --color-text-primary: #1C1917;
+  --color-text-secondary: #78716C;
+  --color-text-muted: #A8A29E;
+  --color-accent: #E5702A;
+  --color-accent-hover: #C85A1E;
+  --color-accent-dim: rgba(229, 112, 42, 0.1);
+  --radius-card: 12px;
+  --radius-btn: 8px;
+  --radius-sm: 6px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #FAFAF8;
+  color: #1C1917;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D6D3D1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #A8A29E; }
+
+/* Selection */
+::selection { background-color: rgba(229, 112, 42, 0.15); color: #1C1917; }
+
+/* Focus */
+:focus-visible { outline: 2px solid #E5702A; outline-offset: 2px; border-radius: 4px; }
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }
+.animate-slide-in-right { animation: slideInRight 0.2s ease-out; }
+
+/* Surface layers */
+.surface-base { background-color: #FAFAF8; }
+.surface { background-color: #FFFFFF; }
+.surface-raised { background-color: #F5F4F0; }
+.border-subtle { border-color: #F0EEE9; }
+.border-default { border-color: #E8E6E1; }
+.text-secondary { color: #78716C; }
+.text-muted { color: #A8A29E; }
+.text-accent { color: #E5702A; }
+
+/* Cards */
+.card {
+  background: #FFFFFF;
+  border-radius: 12px;
+  border: 1px solid #E8E6E1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+  border-color: #D6D3D1;
+}
+
+/* Accent */
+.accent { color: #E5702A; }
+.accent-bg { background-color: rgba(229, 112, 42, 0.1); color: #E5702A; }
+.accent-hover:hover { background-color: rgba(229, 112, 42, 0.15); }
+
+/* Buttons */
+.btn-accent {
+  background-color: #E5702A;
+  color: #FFFFFF;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: background-color 0.15s ease;
+}
+.btn-accent:hover { background-color: #C85A1E; }
+
+/* Input - bottom border only */
+.input {
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid #D6D3D1;
+  border-radius: 0;
+  color: #1C1917;
+  transition: border-color 0.15s ease;
+}
+.input:focus { border-bottom-color: #E5702A; outline: none; }
+.input::placeholder { color: #A8A29E; }
+
+/* Tabs */
+.tab { color: #78716C; border-radius: 8px; transition: color 0.15s ease, background-color 0.15s ease; }
+.tab:hover { color: #1C1917; background-color: rgba(0,0,0,0.04); }
+.tab-active { color: #1C1917; background-color: rgba(229,112,42,0.08); font-weight: 500; }
+.tab-active:hover { background-color: rgba(229,112,42,0.12); }

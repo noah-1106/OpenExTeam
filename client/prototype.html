@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenExTeam</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+.group-item:hover .group-btn{opacity:1}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0); }
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+var D = {"agents": [{"id": "agent-1", "name": "品品", "status": "busy", "task": "撰写PRD文档", "avatar": "👩💼"}, {"id": "agent-2", "name": "开开", "status": "online", "task": null, "avatar": "👨💻"}, {"id": "agent-3", "name": "前前", "status": "online", "task": null, "avatar": "👨🎨"}, {"id": "agent-4", "name": "维维", "status": "offline", "task": null, "avatar": "👨🔧"}, {"id": "agent-5", "name": "测测", "status": "online", "task": null, "avatar": "🧪"}], "excardDefs": [{"id": "ec-001", "name": "标准文章撰写流程", "description": "从研究到发布的完整文章生产流水线", "tags": ["内容创作", "写作"], "owner": "品品", "steps": ["加载输入", "确定主线", "加载风格", "撰写文章", "Humanizer润色", "自检", "保存发布"]}, {"id": "ec-002", "name": "文章润色流程", "description": "对已有文章进行AI痕迹去除和语言润色", "tags": ["内容创作", "润色"], "owner": "品品", "steps": ["加载文章", "Humanizer润色", "24项检查", "修改定稿"]}, {"id": "ec-003", "name": "图片生成流程", "description": "根据描述生成配图", "tags": ["内容创作", "设计"], "owner": "前前", "steps": ["理解需求", "生成图片", "风格调整", "确认交付"]}, {"id": "ec-004", "name": "社交趋势同步", "description": "抓取并分析社交媒体趋势", "tags": ["运营", "研究"], "owner": "品品", "steps": ["抓取趋势", "数据分析", "整理报告", "同步知识库"]}, {"id": "ec-005", "name": "Bug复现流程", "description": "快速复现并定位问题", "tags": ["工程", "调试"], "owner": "开开", "steps": ["获取复现步骤", "环境确认", "本地复现", "日志分析", "定位根因"]}, {"id": "ec-006", "name": "前端开发流程", "description": "从需求到组件的标准化前端开发流程", "tags": ["工程", "前端"], "owner": "前前", "steps": ["需求分析", "技术方案设计", "编写组件", "单元测试", "Code Review"]}], "jobs": [{"id": "job-1", "title": "OpenExTeam MVP开发", "description": "完成Phase 1所有功能", "agent": "品品", "type": "one-time", "cycle": null, "schedule": null, "excard": null, "status": "in-progress", "createdAt": "2026-04-14 08:00"}, {"id": "job-2", "title": "每日技术调研", "description": "每天收集AI Agent领域最新动态", "agent": "品品", "type": "recurring", "cycle": "daily", "schedule": {"cycle": "daily", "time": "09:00"}, "excard": "ec-004", "status": "in-progress", "createdAt": "2026-04-14 08:00"}], "tasks": [{"id": "task-1", "jobId": "job-1", "title": "调研竞品Mission Control", "description": "分析其Adapter实现思路", "agent": "品品", "excard": null, "status": "done", "createdAt": "2026-04-14 08:00"}, {"id": "task-2", "jobId": "job-1", "title": "编写PRD需求文档", "description": "整理产品功能规格", "agent": "品品", "excard": null, "status": "done", "createdAt": "2026-04-14 09:00"}, {"id": "task-3", "jobId": "job-1", "title": "设计系统架构", "description": "完成Adapter层接口定义", "agent": "品品", "excard": null, "status": "in-progress", "createdAt": "2026-04-14 10:00"}, {"id": "task-4", "jobId": "job-1", "title": "搭建前端项目结构", "description": "Vue3 + Vite + TailwindCSS", "agent": "前前", "excard": null, "status": "todo", "createdAt": "2026-04-14 11:00"}, {"id": "task-5", "jobId": "job-1", "title": "开发OpenClaw Adapter", "description": "实现healthCheck、listAgents", "agent": "开开", "excard": null, "status": "todo", "createdAt": "2026-04-14 11:30"}, {"id": "task-6", "jobId": "job-1", "title": "开发任务看板界面", "description": "拖拽卡片、创建任务、详情面板", "agent": "前前", "excard": null, "status": "todo", "createdAt": "2026-04-14 14:00"}, {"id": "task-7", "jobId": "job-1", "title": "开发监控面板", "description": "Agent状态、Token消耗、实时日志", "agent": "前前", "excard": null, "status": "todo", "createdAt": "2026-04-14 15:00"}, {"id": "task-8", "jobId": "job-1", "title": "开发聊天界面", "description": "私聊、群聊、模拟agent回复", "agent": "前前", "excard": null, "status": "todo", "createdAt": "2026-04-14 16:00"}], "chatSessions": [{"id": "p2p-pinpin", "type": "p2p", "name": "品品", "avatar": "👩💼", "agentId": "agent-1", "messages": [{"sender": "user", "text": "品品，帮我梳理Phase 1验收标准", "time": "18:00"}, {"sender": "agent", "text": "Phase 1验收标准：\n1.能添加OpenClaw配对\n2.能测试连接\n3.左侧显示Agent列表\n4.能创建任务卡片\n5.能拖拽切换状态\n6.能下发任务\n7.Agent状态实时\n8.能单聊", "time": "18:01"}]}, {"id": "p2p-kaikai", "type": "p2p", "name": "开开", "avatar": "👨💻", "agentId": "agent-2", "messages": [{"sender": "user", "text": "开开，查下health接口返回", "time": "18:30"}, {"sender": "agent", "text": "health返回：\n{ok:true,ts:...,channels:{...}}\n主要是ok字段。", "time": "18:31"}]}, {"id": "p2p-qianqian", "type": "p2p", "name": "前前", "avatar": "👨🎨", "agentId": "agent-3", "messages": [{"sender": "user", "text": "前端项目初始化好了吗？", "time": "18:20"}, {"sender": "agent", "text": "初始化完成！Vue3+Vite+TailwindCSS已就绪。", "time": "18:21"}]}, {"id": "group-dev", "type": "group", "name": "开发群", "avatar": "👥", "agentIds": ["agent-1", "agent-2", "agent-3"], "messages": [{"sender": "品品", "agentId": "agent-1", "text": "今天推进OpenExTeam：\n前前Vue3前端\n开开Adapter\n我PRD+进度", "time": "09:00"}, {"sender": "开开", "agentId": "agent-2", "text": "收到，我研究WebSocket RPC", "time": "09:05"}, {"sender": "前前", "agentId": "agent-3", "text": "好，我去搭架子", "time": "09:06"}]}], "connections": [{"id": "conn-1", "name": "我的OpenClaw", "url": "http://localhost:18789", "status": "connected", "lastHeartbeat": "2026-04-14 18:00"}]};
+
+var AGENTS = D.agents;
+var EXCARDS = D.excardDefs;
+var _jobs = D.jobs.slice();
+var _tasks = D.tasks.slice();
+var SESSIONS = D.chatSessions.slice();
+var CONNECTIONS = D.connections;
+
+var ctx = null;
+var tab = "message";
+var chatId = "p2p-kaikai";
+var typing = false;
+
+document.addEventListener("DOMContentLoaded", function() {
+  renderApp();
+});
+
+function esc(s) {
+  if (s == null) return "";
+  var d = document.createElement("div");
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function renderApp() {
+  var app = document.getElementById("app");
+  app.innerHTML = "<div style=\"display:flex;height:100vh;overflow:hidden\">" +
+    renderSidebar() +
+    "<div style=\"flex:1;display:flex;flex-direction:column;overflow:hidden\">" +
+    renderTabBar() +
+    "<main id=\"main\" style=\"flex:1;overflow:hidden;display:flex\"></main>" +
+    "</div></div>";
+  // Ensure floating panel container exists
+  if (!document.getElementById("dp")) {
+    var dp = document.createElement("div");
+    dp.id = "dp";
+    document.body.appendChild(dp);
+  }
+  renderTab();
+  clockTick();
+}
+
+function clockTick() {
+  var c = document.getElementById("top-clock");
+  if (c) c.textContent = new Date().toLocaleTimeString("zh-CN", {hour:"2-digit", minute:"2-digit"});
+  setTimeout(clockTick, 1000);
+}
+
+function renderSidebar() {
+  var p2pSessions = SESSIONS.filter(function(s) { return s.type === "p2p"; });
+  var groupSessions = SESSIONS.filter(function(s) { return s.type === "group"; });
+
+  var p2pHtml = p2pSessions.map(function(s) {
+    var act = ctx && ctx.t === "sess" && ctx.id === s.id;
+    var lm = s.messages.length > 0 ? s.messages[s.messages.length - 1].text : "";
+    var bg = act ? "#eff6ff" : "transparent";
+    return "<div onclick='selCtx(" + '"sess"' + "," + '"' + s.id + '"' + ")' style='display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;cursor:pointer;margin:0 6px;background:" + bg + ";transition:background 0.1s'>" +
+      "<div style='width:34px;height:34px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0'>" + s.avatar + "</div>" +
+      "<div style='flex:1;min-width:0'>" +
+      "<div style='font-size:13px;font-weight:" + (act ? "600" : "500") + ";color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>" + esc(s.name) + "</div>" +
+      "<div style='font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>" + esc(lm) + "</div></div></div>";
+  }).join("");
+
+  var grpHtml = groupSessions.map(function(s) {
+    var act = ctx && ctx.t === "sess" && ctx.id === s.id;
+    var lm = s.messages.length > 0 ? s.messages[s.messages.length - 1].text : "";
+    var bg = act ? "#eff6ff" : "transparent";
+    return "<div class='group-item' style='display:flex;align-items:center;gap:4px;padding:8px 12px;border-radius:8px;margin:0 6px;background:" + bg + ";transition:background 0.15s;position:relative'>" +
+      "<div onclick='selCtx(" + '"sess"' + "," + '"' + s.id + '"' + ")' style='flex:1;min-width:0;display:flex;align-items:center;gap:10px;cursor:pointer'>" +
+      "<div style='width:34px;height:34px;border-radius:10px;background:#ede9fe;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0'>" + s.avatar + "</div>" +
+      "<div style='flex:1;min-width:0'>" +
+      "<div style='font-size:13px;font-weight:" + (act ? "600" : "500") + ";color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>" + esc(s.name) + "</div>" +
+      "<div style='font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>" + esc(lm) + "</div></div></div></div>";
+  }).join("");
+
+  return "<aside style='width:220px;background:#fff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;flex-shrink:0'>" +
+    "<div style='padding:16px;border-bottom:1px solid #f1f5f9'>" +
+    "<div style='display:flex;align-items:center;gap:10px'>" +
+    "<div style='width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px'>O</div>" +
+    "<div><div style='font-weight:600;color:#1e293b;font-size:14px'>OpenExTeam</div><div style='font-size:11px;color:#94a3b8'>v0.12.0</div></div></div></div>" +
+    "<div style='flex:1;overflow-y:auto;padding:12px 0'>" + 
+    "<div style='padding:0 16px;margin-bottom:12px'>" +
+    "<div style='font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;padding:4px 8px;margin-bottom:6px'>单聊</div>" + p2pHtml + "</div>" +
+    "<div style='padding:0 16px'>" +
+    "<div style='font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;padding:4px 8px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between'><span>群聊</span><button onclick='openCreateGroup()' style='font-size:12px;color:#3b82f6;background:none;border:none;cursor:pointer;padding:0'>+ 新建</button></div>" + grpHtml + "</div></div>" +
+    "<div style='padding:12px 16px;border-top:1px solid #f1f5f9'>" +
+    "<div style='display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8'>" +
+    "<span style='width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block'></span>" +
+    "<span>已连接 OpenClaw</span></div></div></aside>";
+}
+
+function renderTabBar() {
+  var tabs = [
+    {id: "message", label: "\u6D88\u606F"},
+    {id: "task", label: "\u4EFB\u52A1"},
+    {id: "jobview", label: "\u5DE5\u4F5C"},
+    {id: "excard", label: "ExCard"},
+    {id: "monitor", label: "\u76D1\u63A7"},
+    {id: "settings", label: "\u8BBE\u7F6E"}
+  ];
+  var tabHtml = "";
+  tabs.forEach(function(t) {
+    var isActive = t.id === tab;
+    tabHtml += "<button onclick=\"switchTab('" + t.id + "')\" style=\"padding:12px 16px;font-size:14px;font-weight:500;border-bottom:2px solid " + (isActive ? "#3b82f6" : "transparent") + ";color:" + (isActive ? "#3b82f6" : "#64748b") + ";background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;transition:all 0.15s\">" + t.label + "</button>";
+  });
+  return "<header style=\"background:#fff;border-bottom:1px solid #e2e8f0;padding:0 24px;display:flex;align-items:center;justify-content:space-between\">" +
+    "<nav style=\"display:flex;align-items:center\">" + tabHtml + "</nav>" +
+    "<div style=\"display:flex;align-items:center;gap:12px\">" +
+    "<span id=\"top-clock\" style=\"font-size:12px;color:#94a3b8\"></span>" +
+    "<div style=\"width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:13px;box-shadow:0 2px 8px rgba(59,130,246,0.3)\">P</div></div></header>";
+}
+
+function selCtx(t, id) {
+  ctx = {t: t, id: id};
+  if (t === "sess") {
+    chatId = id;
+    typing = false;
+  }
+  renderApp();
+}
+
+function switchTab(t) {
+  tab = t;
+  renderApp();
+}
+
+function renderTab() {
+  var main = document.getElementById("main");
+  if (!main) return;
+  main.style.opacity = "0";
+  main.style.transform = "translateY(6px)";
+  main.style.transition = "opacity 0.2s, transform 0.2s";
+  setTimeout(function() {
+    if (tab === "message") renderChat(main);
+    else if (tab === "task") renderTask(main);
+    else if (tab === "jobview") renderJobView(main);
+    else if (tab === "excard") renderExcard(main);
+    else if (tab === "monitor") renderMonitor(main);
+    else if (tab === "settings") renderSettings(main);
+    main.style.opacity = "1";
+    main.style.transform = "translateY(0)";
+  }, 10);
+}
+
+// ===== CHAT =====
+function renderChat(c) {
+  var sess = SESSIONS.find(function(s) { return s.id === chatId; });
+  if (!sess && ctx) {
+    if (ctx.t === "ag") {
+      var ag = AGENTS.find(function(a) { return a.id === ctx.id; });
+      sess = SESSIONS.find(function(s) { return s.agentId === ag && s.type === "p2p"; });
+    } else if (ctx.t === "group") {
+      sess = SESSIONS.find(function(s) { return s.id === ctx.id && s.type === "group"; });
+    }
+  }
+  if (!sess) sess = SESSIONS[0];
+  chatId = sess.id;
+
+  var chatListHtml = SESSIONS.map(function(s) {
+    var act = s.id === sess.id;
+    var lm = s.messages.length > 0 ? s.messages[s.messages.length - 1].text : "";
+    var unreads = Math.floor(Math.random() * 3);
+    return "<div onclick=\"openChat('" + s.id + "')\" style=\"display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;margin:0 6px;background:" + (act ? "#eff6ff" : "transparent") + "\">" +
+      "<div style=\"width:38px;height:38px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0\">" + s.avatar + "</div>" +
+      "<div style=\"flex:1;min-width:0\">" +
+      "<div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:2px\">" +
+      "<span style=\"font-size:13px;font-weight:" + (act ? "600" : "500") + ";color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\">" + esc(s.name) + "</span>" +
+      "<span style=\"font-size:11px;color:#94a3b8;flex-shrink:0;margin-left:4px\">" + (s.messages[s.messages.length - 1] ? s.messages[s.messages.length - 1].time : "") + "</span></div>" +
+      "<div style=\"display:flex;align-items:center;justify-content:space-between\">" +
+      "<span style=\"font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1\">" + esc(lm) + "</span>" +
+      (unreads > 0 ? "<span style=\"width:18px;height:18px;border-radius:50%;background:#3b82f6;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:4px\">" + unreads + "</span>" : "") +
+      "</div></div></div>";
+  }).join("");
+
+  var msgsHtml = "";
+  sess.messages.forEach(function(msg) {
+    if (msg.sender === "user") {
+      msgsHtml += "<div style=\"display:flex;align-items:start;gap:10px;justify-content:flex-end;margin-bottom:14px\">" +
+        "<div style=\"max-width:70%\">" +
+        "<div style=\"background:#3b82f6;color:#fff;border-radius:16px 16px 4px 16px;padding:10px 14px;font-size:14px;line-height:1.5;box-shadow:0 2px 8px rgba(59,130,246,0.2)\">" + esc(msg.text) + "</div>" +
+        "<p style=\"font-size:11px;color:#94a3b8;margin-top:4px;text-align:right\">" + msg.time + "</p></div>" +
+        "<div style=\"width:36px;height:36px;border-radius:50%;background:#60a5fa;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex-shrink:0;box-shadow:0 2px 6px rgba(59,130,246,0.25)\">\uD83D\uDC64</div></div>";
+    } else {
+      var sa = AGENTS.find(function(a) { return a.id === msg.agentId; });
+      var av2 = sa ? sa.avatar : sess.avatar;
+      var sn = msg.agentId ? (sa ? sa.name : msg.sender) : sess.name;
+      msgsHtml += "<div style=\"display:flex;align-items:start;gap:10px;margin-bottom:14px\">" +
+        "<div style=\"width:36px;height:36px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.08)\">" + av2 + "</div>" +
+        "<div style=\"max-width:70%\">" +
+        "<div style=\"display:flex;align-items:center;gap:6px;margin-bottom:4px\">" +
+        "<span style=\"font-size:12px;font-weight:600;color:#374151\">" + esc(sn) + "</span>" +
+        "<span style=\"font-size:11px;color:#94a3b8\">" + msg.time + "</span></div>" +
+        "<div style=\"background:#fff;border:1px solid #e2e8f0;border-radius:16px 4px 16px 16px;padding:10px 14px;font-size:14px;color:#1e293b;line-height:1.5;white-space:pre-wrap;box-shadow:0 1px 4px rgba(0,0,0,0.06)\">" + esc(msg.text) + "</div></div></div>";
+    }
+  });
+
+  if (typing) {
+    msgsHtml += "<div style=\"display:flex;align-items:start;gap:10px;margin-bottom:14px\">" +
+      "<div style=\"width:36px;height:36px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:14px\">" + sess.avatar + "</div>" +
+      "<div>" +
+      "<div style=\"display:flex;align-items:center;gap:6px;margin-bottom:4px\">" +
+      "<span style=\"font-size:12px;font-weight:600;color:#374151\">" + esc(sess.name) + "</span></div>" +
+      "<div style=\"background:#fff;border:1px solid #e2e8f0;border-radius:16px 4px 16px 16px;padding:10px 14px;box-shadow:0 1px 4px rgba(0,0,0,0.06)\">" +
+      "<span style=\"display:inline-block;width:8px;height:8px;background:#94a3b8;border-radius:50%;animation:bounce 1.4s infinite ease-in-out both;animation-delay:-0.32s\"></span>" +
+      "<span style=\"display:inline-block;width:8px;height:8px;background:#94a3b8;border-radius:50%;animation:bounce 1.4s infinite ease-in-out both;animation-delay:-0.16s\"></span>" +
+      "<span style=\"display:inline-block;width:8px;height:8px;background:#94a3b8;border-radius:50%;animation:bounce 1.4s infinite ease-in-out both\"></span></div></div></div>";
+  }
+
+  var showChatList = !chatId;
+var chatListPanel = showChatList ? "<div style=\"width:268px;background:#fff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;flex-shrink:0\">" +
+    "<div style=\"padding:14px 16px;border-bottom:1px solid #f1f5f9\">" +
+    "<span style=\"font-size:14px;font-weight:600;color:#1e293b\">\u6D88\u606F</span></div>" +
+    "<div style=\"flex:1;overflow-y:auto;padding:8px 0\">" + chatListHtml + "</div></div>" : "";
+c.innerHTML = "<div style=\"display:flex;flex:1;overflow:hidden;background:#f8fafc\">" + chatListPanel +
+    "<div style=\"flex:1;display:flex;flex-direction:column;background:#fff;overflow:hidden\">" +
+    "<div style=\"padding:14px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:12px\">" +
+    "<div style=\"width:38px;height:38px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:18px\">" + sess.avatar + "</div>" +
+    "<div style=\"flex:1\"><div style=\"font-weight:600;color:#1e293b;font-size:15px\">" + esc(sess.name) + "</div>" +
+    "<div style=\"font-size:12px;color:#94a3b8\">" + (sess.type === "group" ? (sess.agentIds ? sess.agentIds.length : 0) + " \u4F4D\u6210\u5458" : "\u79C1\u804A") + "</div></div>" + (sess.type === "group" ? "<button onclick='openEditGroup(\"" + sess.id + "\")' style='padding:6px 12px;font-size:12px;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer'>群设置</button>" : "") + "</div>" +
+    "<div id=\"cmsgs\" style=\"flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:0;background:#f8fafc\">" + msgsHtml + "</div>" +
+    "<div style=\"padding:14px 20px;border-top:1px solid #f1f5f0;background:#fff\">" +
+    "<div style=\"display:flex;align-items:flex-end;gap:10px\">" +
+    "<div style=\"flex:1\">" +
+    "<textarea id=\"cinput\" rows=\"1\" placeholder=\"\u8F93\u5165\u6D88\u606F\uFF0C\u6309 Enter \u53D1\u9001...\" onkeydown=\"chatKey(event)\ oninput=\"autoGrow(this)\ style=\"width:100%;padding:10px 14px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;font-size:14px;resize:none;outline:none;line-height:1.5;font-family:inherit\"></textarea></div>" +
+    "<button onclick=\"sendMsg()\" style=\"width:40px;height:40px;border-radius:50%;background:#3b82f6;color:#fff;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;box-shadow:0 2px 8px rgba(59,130,246,0.3)\">" +
+    "<svg width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 19l9 2-9-18-9 18 9-2zm0 0v-8\"/></svg></button></div></div></div></div>";
+
+  setTimeout(function() {
+    var el = document.getElementById("cmsgs");
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 30);
+}
+
+function openChat(id) {
+  chatId = id;
+  typing = false;
+  renderTab();
+}
+
+function chatKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMsg();
+  }
+}
+
+function autoGrow(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+}
+
+function sendMsg() {
+  var inp = document.getElementById("cinput");
+  var text = inp.value.trim();
+  if (!text) return;
+  var sess = SESSIONS.find(function(s) { return s.id === chatId; });
+  if (!sess) return;
+  sess.messages.push({sender: "user", text: text, time: new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})});
+  inp.value = "";
+  inp.style.height = "auto";
+  renderTab();
+  typing = true;
+  renderTab();
+  setTimeout(function() {
+    typing = false;
+    var reps = ["\u6536\u5230\uFF0C\u8BA9\u6211\u5904\u7406\u4E00\u4E0B\u3002", "\u597D\u7684\uFF0C\u8FD9\u4E2A\u6211\u6765\u641E\u3002", "\u660E\u767D\u4E86\uFF0C\u6211\u9A6C\u4E0A\u5F00\u59CB\u3002", "\u6CA1\u95EE\u9898\uFF0C\u6709\u8FDB\u5C55\u6211\u53CA\u65F6\u540C\u6B65\u3002"];
+    sess.messages.push({sender: sess.name, agentId: sess.agentId || null, text: reps[Math.floor(Math.random() * reps.length)], time: new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})});
+    renderTab();
+  }, 1500);
+}
+
+// ===== TASK BOARD =====
+function renderTask(c) {
+  var cols = [
+    {id: "todo", label: "To Do", c: "#94a3b8"},
+    {id: "in-progress", label: "In Progress", c: "#3b82f6"},
+    {id: "done", label: "Done", c: "#22c55e"}
+  ];
+  var wd = ["", "\u5468\u4E00", "\u5468\u4E8C", "\u5468\u4E09", "\u5468\u56DB", "\u5468\u4E94", "\u5468\u516D", "\u5468\u65E5"];
+
+  var filtered = _jobs.map(function(j) {
+    return Object.assign({}, j, {_t: _tasks.filter(function(t) { return t.jobId === j.id; })});
+  });
+  var lbl = "\u5168\u90E8\u5DE5\u4F5C";
+  if (ctx) {
+    if (ctx.t === "ag") {
+      var ag = AGENTS.find(function(a) { return a.id === ctx.id; });
+      lbl = (ag ? ag.name : "") + " \u7684\u5DE5\u4F5C";
+      filtered = _jobs.filter(function(j) { return j.agent === (ag && ag.name); }).map(function(j) {
+        return Object.assign({}, j, {_t: _tasks.filter(function(t) { return t.jobId === j.id && t.agent === (ag && ag.name); })});
+      });
+    } else if (ctx.t === "group") {
+      var sess = SESSIONS.find(function(s) { return s.id === ctx.id && s.type === "group"; });
+      lbl = (sess ? sess.name : "") + " \u6D89\u53CA\u7684\u5DE5\u4F5C";
+      var mems = sess && sess.agentIds ? sess.agentIds.map(function(id) {
+        var a = AGENTS.find(function(x) { return x.id === id; });
+        return a && a.name;
+      }).filter(Boolean) : [];
+      filtered = _jobs.filter(function(j) { return mems.indexOf(j.agent) >= 0; }).map(function(j) {
+        return Object.assign({}, j, {_t: _tasks.filter(function(t) { return t.jobId === j.id && mems.indexOf(t.agent) >= 0; })});
+      });
+    }
+  }
+
+  var bsBlue = "padding:8px 16px;background:#3b82f6;border:none;color:#fff;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;box-shadow:0 2px 6px rgba(59,130,246,0.25)";
+  var bsWhite = "padding:8px 16px;background:#fff;border:1px solid #e2e8f0;color:#475569;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer";
+
+  var html = "<div style=\"display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden\">" +
+    "<div style=\"padding:14px 24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#fff\">" +
+    "<div><h2 style=\"font-size:16px;font-weight:700;color:#1e293b;margin:0\">" + lbl + "</h2>" +
+    "<p style=\"font-size:12px;color:#94a3b8;margin:2px 0 0 0\">" + filtered.length + " \u4e2a\u5de5\u4f5c \u00b7 " + _tasks.length + " \u4e2a\u4efb\u52a1</p></div>" +
+    "<div style=\"display:flex;gap:8px\">" +
+    "<button onclick=\"openNewJob()\" style=\"" + bsWhite + "\">+ \u65b0\u5efa\u5de5\u4f5c</button>" +
+    "<button onclick=\"openNewTask()\" style=\"" + bsBlue + "\">+ \u65b0\u5efa\u4efb\u52a1</button></div></div>" +
+    "<div style=\"flex:1;overflow-y:auto;padding:16px 24px;background:#f1f5f9\">";
+
+  if (filtered.length === 0) {
+    html += "<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:#94a3b8\">" +
+      "<div style=\"font-size:48px;margin-bottom:12px\">\ud83d\udccb</div>" +
+      "<div style=\"font-size:16px;font-weight:500;margin-bottom:4px\">\u6682\u65e0\u5de5\u4f5c</div>" +
+      "<div style=\"font-size:13px\">\u70b9\u51fb\u300c+ \u65b0\u5efa\u5de5\u4f5c\u300d\u5f00\u59cb</div></div>";
+  } else {
+    filtered.forEach(function(job) {
+      var tl = "<span style=\"font-size:12px;color:#64748b\">\u26a1 \u4e00\u6b21\u6027\u5de5\u4f5c</span>";
+      if (job.type === "recurring" && job.schedule) {
+        if (job.schedule.cycle === "daily") tl = "<span style=\"font-size:12px;color:#3b82f6\">\ud83d\udd04 \u6bcf\u5929 " + (job.schedule.time || "") + "</span>";
+        else if (job.schedule.cycle === "weekly") tl = "<span style=\"font-size:12px;color:#3b82f6\">\ud83d\udd04 " + (wd[job.schedule.weekday || 1] || "\u5468\u4e00") + " " + (job.schedule.time || "") + "</span>";
+        else if (job.schedule.cycle === "monthly") tl = "<span style=\"font-size:12px;color:#3b82f6\">\ud83d\udd04 \u6bcf\u6708" + (job.schedule.monthday || 1) + "\u65e5 " + (job.schedule.time || "") + "</span>";
+      }
+      var dc = (job._t || []).filter(function(t) { return t.status === "done"; }).length;
+      var tc = (job._t || []).length;
+      var pct = tc > 0 ? Math.round(dc / tc * 100) : 0;
+      var sc = job.status === "done" ? "\u5df2\u5b8c\u6210" : job.status === "in-progress" ? "\u8fdb\u884c\u4e2d" : "\u672a\u5f00\u59cb";
+      var sc_cls = job.status === "done" ? "bg-green-50 text-green-600" : job.status === "in-progress" ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500";
+      var prog_col = job.status === "done" ? "#22c55e" : job.status === "in-progress" ? "#3b82f6" : "#cbd5e1";
+
+      html += "<div style=\"background:#fff;border-radius:14px;border:1px solid #e2e8f0;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04)\">" +
+        "<div style=\"padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;gap:12px\">" +
+        "<div style=\"flex:1;min-width:0\">" +
+        "<div style=\"display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap\">" +
+        "<span style=\"font-weight:600;color:#1e293b;font-size:14px\">" + esc(job.title) + "</span>" + tl +
+        (job.excard ? "<span style=\"font-size:11px;padding:1px 7px;border-radius:8px;background:#f5f3ff;color:#7c3aed;font-weight:500\">" + esc(job.excard) + "</span>" : "") +
+        "<span style=\"font-size:11px;padding:1px 7px;border-radius:8px;" + sc_cls + "\">" + sc + "</span></div>" +
+        "<p style=\"font-size:12px;color:#94a3b8;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\">" + esc(job.description) + "</p></div>" +
+        "<div style=\"display:flex;align-items:center;gap:10px;flex-shrink:0\">" +
+        (job._t && job._t.length > 0 ? "<button onclick=\"startJobWorkflow('" + job.id + "')\" style=\"padding:6px 14px;background:#22c55e;border:none;color:#fff;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;box-shadow:0 2px 6px rgba(34,197,94,0.25)\">▶ 启动工作流</button>" : "") +
+        "<button onclick=\"editJob('" + job.id + "')\" style=\"width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#94a3b8;border:1px solid #e2e8f0;background:#fff;cursor:pointer;flex-shrink:0\">\u270e</button>" +
+        "<button onclick=\"deleteJob('" + job.id + "')\" style=\"width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#94a3b8;border:1px solid #e2e8f0;background:#fff;cursor:pointer;flex-shrink:0\">\u2715</button>" +
+        "<div style=\"text-align:right;margin-left:4px\"><div style=\"font-size:14px;font-weight:700;color:#1e293b\">" + dc + "/" + tc + "</div><div style=\"font-size:10px;color:#94a3b8\">\u4efb\u52a1</div></div>" +
+        "<div style=\"width:72px\">" +
+        "<div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:3px\">" +
+        "<span style=\"font-size:10px;color:#94a3b8\">" + pct + "%</span></div>" +
+        "<div style=\"height:4px;background:#f1f5f9;border-radius:2px;overflow:hidden\">" +
+        "<div style=\"height:100%;border-radius:2px;width:" + pct + "%;background:" + prog_col + ";transition:width 0.3s\"></div></div></div>" + "</div>" +
+        "</div>" +
+        "<div style=\"display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0\">";
+
+      cols.forEach(function(col) {
+        var ct = (job._t || []).filter(function(t) { return t.status === col.id; });
+        var col_border = col.id !== "done" ? "border-right:1px solid #f1f5f9" : "";
+        html += "<div style=\"" + col_border + "\">" +
+          "<div style=\"padding:10px 14px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:6px\">" +
+          "<span style=\"width:8px;height:8px;border-radius:50%;background:" + col.c + ";display:inline-block;flex-shrink:0\"></span>" +
+          "<span style=\"font-size:12px;font-weight:600;color:#475569\">" + col.label + "</span>" +
+          "<span style=\"font-size:11px;color:#94a3b8;margin-left:auto\">" + ct.length + "</span></div>" +
+          "<div style=\"padding:10px;display:flex;flex-direction:column;gap:8px;min-height:120px;max-height:360px;overflow-y:auto\">";
+        if (ct.length === 0) {
+          html += "<div style=\"padding:20px 0;text-align:center;font-size:12px;color:#cbd5e1\">\u6682\u65e0</div>";
+        } else {
+          ct.forEach(function(task) {
+            var tcbg = task.status === "done" ? "#f0fdf4" : task.status === "in-progress" ? "#eff6ff" : "#f8fafc";
+            var tcbdr = task.status === "done" ? "#bbf7d0" : task.status === "in-progress" ? "#bfdbfe" : "#e2e8f0";
+            var stepNum = job._t ? job._t.indexOf(task) + 1 : 0;
+            var isCurrentStep = task.status === "in-progress";
+            var pulseAnim = isCurrentStep ? "animation:pulse 2s infinite" : "";
+            html += "<div onclick=\"openTaskDetail('" + task.id + "')\" style=\"background:" + tcbg + ";border:1px solid " + tcbdr + ";border-radius:10px;padding:11px;cursor:pointer;transition:all 0.15s;" + pulseAnim + "\">" +
+              "<div style=\"display:flex;align-items:flex-start;gap:7px;margin-bottom:7px\">" +
+              "<span style=\"width:7px;height:7px;border-radius:50%;background:" + col.c + ";flex-shrink:0;margin-top:5px\"></span>" +
+              (stepNum > 0 ? "<span style=\"font-size:10px;padding:1px 5px;border-radius:6px;background:#e2e8f0;color:#64748b;font-weight:500;flex-shrink:0\">#" + stepNum + "</span>" : "") +
+              "<span style=\"font-size:13px;font-weight:500;color:#1e293b;line-height:1.4;flex:1\">" + esc(task.title) + "</span>" +
+              (isCurrentStep ? "<span style=\"font-size:10px;padding:1px 6px;border-radius:6px;background:#dbeafe;color:#2563eb;font-weight:500;flex-shrink:0\">执行中</span>" : "") + "</div>" +
+              "<p style=\"font-size:12px;color:#64748b;margin:0 0 8px 14px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden\">" + esc(task.description || "") + "</p>" +
+              "<div style=\"display:flex;align-items:center;justify-content:space-between;padding-left:14px\">" +
+              "<span style=\"font-size:11px;color:#64748b\">" + esc(task.agent) + "</span>" +
+              (task.excard ? "<span style=\"font-size:10px;padding:1px 6px;border-radius:7px;background:#f5f3ff;color:#7c3aed;font-weight:500\">" + esc(task.excard) + "</span>" : "") + "</div></div>";
+          });
+        }
+        html += "</div></div>";
+      });
+      html += "</div></div>";
+    });
+  }
+  html += "</div></div>";
+  c.innerHTML = html;
+}
+
+function openTaskDetail(taskId) {
+  var task = _tasks.find(function(t) { return t.id === taskId; });
+  if (!task) return;
+  var job = _jobs.find(function(j) { return j.id === task.jobId; });
+  var so = [{v: "todo", l: "To Do"}, {v: "in-progress", l: "In Progress"}, {v: "done", l: "Done"}];
+  var sb = so.map(function(s) {
+    var act = task.status === s.v;
+    return "<button onclick=\"setTaskStatus('" + task.id + "','" + s.v + "')\" style=\"padding:6px 14px;border-radius:8px;font-size:13px;font-weight:500;border:1px solid " + (act ? "#3b82f6" : "#e2e8f0") + ";background:" + (act ? "#eff6ff" : "transparent") + ";color:" + (act ? "#2563eb" : "#64748b") + ";cursor:pointer\">" + s.l + "</button>";
+  }).join("");
+  var eh = task.excard ? "<div style=\"margin-bottom:16px\"><div style=\"font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px\">ExCard</div><div style=\"padding:8px 12px;background:#f5f3ff;border-radius:10px;font-size:13px;color:#7c3aed;font-weight:500\">" + esc(task.excard) + "</div></div>" : "";
+  var existing = document.getElementById("_task_detail_panel");
+  if (existing) existing.remove();
+  var panelHtml = "<div id=\"_task_detail_panel\" style=\"position:fixed;inset:0;z-index:9999\">" +
+    "<div onclick=\"closeDetail()\" style=\"position:fixed;inset:0;background:rgba(0,0,0,0.3);backdrop-filter:blur(3px)\"></div>" +
+    "<div style=\"position:fixed;right:0;top:0;height:100%;width:440px;background:#fff;box-shadow:-4px 0 32px rgba(0,0,0,0.18);display:flex;flex-direction:column;overflow:hidden\">" +
+    "<div style=\"padding:18px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:flex-start;justify-content:space-between\">" +
+    "<div style=\"flex:1;padding-right:12px\">" +
+    "<h2 style=\"font-size:17px;font-weight:700;color:#1e293b;margin:0;line-height:1.4\">" + esc(task.title) + "</h2>" +
+    "<p style=\"font-size:12px;color:#94a3b8;margin:4px 0 0 0\">" + (job ? esc(job.title) : "\u672A\u5F52\u7C7B") + "</p></div>" +
+    "<button onclick=\"closeDetail()\" style=\"width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:16px;border:none;background:none;cursor:pointer;flex-shrink:0\">\u2715</button></div>" +
+    "<div style=\"flex:1;overflow-y:auto;padding:20px\">" +
+    "<div style=\"margin-bottom:16px\"><div style=\"font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px\">操作</div><button onclick=\"startTask('" + task.id + "')\" style=\"padding:8px 16px;background:#3b82f6;border:none;color:#fff;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;box-shadow:0 2px 6px rgba(59,130,246,0.25)\">▶ 启动任务</button></div>" +
+    "<div style=\"margin-bottom:16px\"><div style=\"font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px\">状态</div><div style=\"display:flex;gap:6px;flex-wrap:wrap\">" + sb + "</div></div>" +
+    "<div style=\"margin-bottom:16px\"><div style=\"font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px\">\u63CF\u8FF0</div><p style=\"font-size:14px;color:#334155;line-height:1.6;margin:0\">" + esc(task.description || "\u6682\u65E0\u63CF\u8FF0") + "</p></div>" +
+    "<div style=\"margin-bottom:16px\"><div style=\"font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px\">\u8D1F\u8D23\u4EBA</div><div style=\"display:flex;align-items:center;gap:8px\"><span style=\"font-size:20px\">" + esc(task.agent) + "</span><span style=\"font-size:14px;font-weight:500;color:#1e293b\">" + esc(task.agent) + "</span></div></div>" +
+    "<div style=\"margin-bottom:16px\"><div style=\"font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px\">\u521B\u5EFA\u65F6\u95F4</div><p style=\"font-size:14px;color:#334155;margin:0\">" + esc(task.createdAt) + "</p></div>" +
+    eh + "</div></div></div>";
+  document.body.insertAdjacentHTML("beforeend", panelHtml);
+}
+
+function closeDetail() {
+  var el = document.getElementById("_task_detail_panel");
+  if (el) el.remove();
+}
+
+function openCreateGroup() {
+  var agentOpts = AGENTS.map(function(a) {
+    return "<label style='display:flex;align-items:center;gap:8px;padding:8px;cursor:pointer;border-radius:8px;hover:bg:#f1f5f9'><input type='checkbox' name='gmembers' value='" + a.id + "' style='width:16px;height:16px'><span style='font-size:20px'>" + esc(a.avatar) + "</span><span style='font-size:13px;color:#334155'>" + esc(a.name) + "</span></label>";
+  }).join("");
+  var html = "<div id=\"_create_group_panel\" style=\"position:fixed;inset:0;z-index:9999\">" +
+    "<div onclick=\"closeCreateGroup()\" style=\"position:fixed;inset:0;background:rgba(0,0,0,0.3);backdrop-filter:blur(3px)\"></div>" +
+    "<div style=\"position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:400px;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.2);padding:24px\">" +
+    "<div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:20px\"><h3 style=\"margin:0;font-size:16px;color:#1e293b\">新建群聊</h3><button onclick=\"closeCreateGroup()\" style=\"width:28px;height:28px;border-radius:6px;border:none;background:#f1f5f9;cursor:pointer;font-size:14px;color:#64748b\">✕</button></div>" +
+    "<div style=\"margin-bottom:16px\"><label style=\"display:block;font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px\">群名称</label><input type='text' id='gname' placeholder='输入群名称' style=\"width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;outline:none;box-sizing:border-box\"></div>" +
+    "<div style=\"margin-bottom:20px\"><label style=\"display:block;font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px\">选择成员</label><div style=\"max-height:200px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px\">" + agentOpts + "</div></div>" +
+    "<div style=\"display:flex;justify-content:flex-end;gap:8px\"><button onclick=\"closeCreateGroup()\" style=\"padding:8px 16px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#64748b;font-size:13px;cursor:pointer\">取消</button><button onclick=\"createGroup()\" style=\"padding:8px 16px;border-radius:8px;border:none;background:#3b82f6;color:#fff;font-size:13px;cursor:pointer\">创建</button></div></div></div>";
+  document.body.insertAdjacentHTML("beforeend", html);
+}
+
+function closeCreateGroup() {
+  var el = document.getElementById("_create_group_panel");
+  if (el) el.remove();
+}
+
+function createGroup() {
+  var name = document.getElementById("gname").value.trim();
+  if (!name) { alert("请输入群名称"); return; }
+  var checkboxes = document.querySelectorAll('input[name="gmembers"]:checked');
+  var memberIds = Array.from(checkboxes).map(function(cb) { return cb.value; });
+  if (memberIds.length === 0) { alert("请至少选择一个成员"); return; }
+  var newId = "group-" + Date.now();
+  var newGroup = {id: newId, type: "group", name: name, avatar: "👥", agentIds: memberIds, messages: []};
+  SESSIONS.push(newGroup);
+  closeCreateGroup();
+  renderSidebar();
+  selCtx(newId);
+}
+
+function openEditGroup(gid) {
+  var group = SESSIONS.find(function(s) { return s.id === gid; });
+  if (!group || group.type !== "group") return;
+  var agentOpts = AGENTS.map(function(a) {
+    var checked = group.agentIds.indexOf(a.id) >= 0 ? "checked" : "";
+    return "<label style='display:flex;align-items:center;gap:8px;padding:8px;cursor:pointer;border-radius:8px'><input type='checkbox' name='emembers' value='" + a.id + "' " + checked + " style='width:16px;height:16px'><span style='font-size:20px'>" + esc(a.avatar) + "</span><span style='font-size:13px;color:#334155'>" + esc(a.name) + "</span></label>";
+  }).join("");
+  var html = "<div id=\"_edit_group_panel\" data-gid=\"" + gid + "\" style=\"position:fixed;inset:0;z-index:9999\">" +
+    "<div onclick=\"closeEditGroup()\" style=\"position:fixed;inset:0;background:rgba(0,0,0,0.3);backdrop-filter:blur(3px)\"></div>" +
+    "<div style=\"position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:400px;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.2);padding:24px\">" +
+    "<div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:20px\"><h3 style=\"margin:0;font-size:16px;color:#1e293b\">管理群成员</h3><button onclick=\"closeEditGroup()\" style=\"width:28px;height:28px;border-radius:6px;border:none;background:#f1f5f9;cursor:pointer;font-size:14px;color:#64748b\">✕</button></div>" +
+    "<div style=\"margin-bottom:20px\"><label style=\"display:block;font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px\">群名称</label><input type='text' id='egname' value='" + esc(group.name) + "' style=\"width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;outline:none;box-sizing:border-box\"></div>" +
+    "<div style=\"margin-bottom:20px\"><label style=\"display:block;font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px\">群成员</label><div style=\"max-height:200px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px\">" + agentOpts + "</div></div>" +
+    "<div style=\"display:flex;justify-content:space-between;align-items:center\"><button onclick=\"deleteGroup('" + gid + "')\" style=\"padding:8px 16px;border-radius:8px;border:1px solid #fee2e2;background:#fef2f2;color:#dc2626;font-size:13px;cursor:pointer\">解散群</button><div style=\"display:flex;gap:8px\"><button onclick=\"closeEditGroup()\" style=\"padding:8px 16px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#64748b;font-size:13px;cursor:pointer\">取消</button><button onclick=\"saveGroup()\" style=\"padding:8px 16px;border-radius:8px;border:none;background:#3b82f6;color:#fff;font-size:13px;cursor:pointer\">保存</button></div></div></div></div>";
+  document.body.insertAdjacentHTML("beforeend", html);
+}
+
+function closeEditGroup() {
+  var el = document.getElementById("_edit_group_panel");
+  if (el) el.remove();
+}
+
+function saveGroup() {
+  var panel = document.getElementById("_edit_group_panel");
+  var gid = panel.getAttribute("data-gid");
+  var group = SESSIONS.find(function(s) { return s.id === gid; });
+  if (!group) return;
+  var name = document.getElementById("egname").value.trim();
+  if (!name) { alert("群名称不能为空"); return; }
+  var checkboxes = document.querySelectorAll('input[name="emembers"]:checked');
+  var memberIds = Array.from(checkboxes).map(function(cb) { return cb.value; });
+  if (memberIds.length === 0) { alert("请至少保留一个成员"); return; }
+  group.name = name;
+  group.agentIds = memberIds;
+  closeEditGroup();
+  renderSidebar();
+}
+
+function deleteGroup(gid) {
+  var group = SESSIONS.find(function(s) { return s.id === gid; });
+  if (!group || group.type !== "group") return;
+  if (!confirm("确定要解散群「" + group.name + "」吗？此操作不可恢复。")) return;
+  SESSIONS = SESSIONS.filter(function(s) { return s.id !== gid; });
+  if (chatId === gid) {
+    chatId = "p2p-kaikai";
+    renderTab();
+  }
+  renderSidebar();
+}
+
+
+function setTaskStatus(tid, ns) {
+  var t = _tasks.find(function(x) { return x.id === tid; });
+  if (t) { t.status = ns; renderTab(); }
+}
+
+// ===== JOB EDIT / DELETE =====
+function editJob(jobId) {
+  var job = _jobs.find(function(j) { return j.id === jobId; });
+  if (!job) return;
+  alert("\u7F16\u8F91\u5DE5\u4F5C\u6F14\u793A\uFF1A" + job.title + " (\u5B9E\u9645\u5F00\u53D1\u4E2D...)");
+}
+function deleteJob(jobId) {
+  var job = _jobs.find(function(j) { return j.id === jobId; });
+  if (!job) return;
+  if (confirm("\u786E\u5B9A\u5220\u9664\u5DE5\u4F5C \"" + job.title + "\" \u5417\uFF1F\u8BE5\u64CD\u4F5C\u4F1A\u540C\u65F6\u5220\u9664\u5173\u8054\u7684\u6240\u6709\u4EFB\u52A1\u3002")) {
+    _jobs = _jobs.filter(function(j) { return j.id !== jobId; });
+    _tasks = _tasks.filter(function(t) { return t.jobId !== jobId; });
+    switchTab(tab);
+  }
+}
+
+
+// ===== JOB VIEW =====
+function renderJobView(c) {
+  var wd = ["", "\u5468\u4E00", "\u5468\u4E8C", "\u5468\u4E09", "\u5468\u56DB", "\u5468\u4E94", "\u5468\u516D", "\u5468\u65E5"];
+  var filtered = _jobs.map(function(j) {
+    return Object.assign({}, j, {_t: _tasks.filter(function(t) { return t.jobId === j.id; })});
+  });
+  var lbl = "\u5168\u90E8\u5DE5\u4F5C";
+  if (ctx && ctx.t === "ag") {
+    var ag = AGENTS.find(function(a) { return a.id === ctx.id; });
+    lbl = (ag && ag.name || "") + " \u7684\u5DE5\u4F5C";
+    filtered = _jobs.filter(function(j) { return j.agent === (ag && ag.name); }).map(function(j) {
+      return Object.assign({}, j, {_t: _tasks.filter(function(t) { return t.jobId === j.id; })});
+    });
+  }
+  var bs = "padding:8px 16px;background:#3b82f6;border:none;color:#fff;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;box-shadow:0 2px 6px rgba(59,130,246,0.25)";
+  var html = "<div style=\"display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden\">" +
+    "<div style=\"padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#fff;border-bottom:1px solid #f1f5f9\">" +
+    "<div><h2 style=\"font-size:18px;font-weight:700;color:#1e293b;margin:0\">" + lbl + "</h2>" +
+    "<p style=\"font-size:13px;color:#94a3b8;margin:2px 0 0 0\">" + filtered.length + " \u4E2A\u5DE5\u4F5C</p></div>" +
+    "<button onclick=\"openNewJob()\" style=\"" + bs + "\">+ \u65B0\u5EFA\u5DE5\u4F5C</button></div>" +
+    "<div style=\"flex:1;overflow-y:auto;padding:20px 24px;background:#f8fafc\">";
+
+  if (filtered.length === 0) {
+    html += "<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:#94a3b8\">" +
+      "<div style=\"font-size:48px;margin-bottom:12px\">\uD83D\uDCCA</div>" +
+      "<div style=\"font-size:16px;font-weight:500\">\u6682\u65E0\u5DE5\u4F5C</div></div>";
+  } else {
+    filtered.forEach(function(job) {
+      var dc = (job._t || []).filter(function(t) { return t.status === "done"; }).length;
+      var tc = (job._t || []).length;
+      var pct = tc > 0 ? Math.round(dc / tc * 100) : 0;
+      var tl = "<span style=\"font-size:12px;color:#64748b\">\u26A1 \u4E00\u6B21\u6027\u5DE5\u4F5C</span>";
+      if (job.type === "recurring" && job.schedule) {
+        if (job.schedule.cycle === "daily") tl = "<span style=\"font-size:12px;color:#3b82f6\">\uD83D\uDD04 \u6BCF\u5929 " + (job.schedule.time || "") + "</span>";
+        else if (job.schedule.cycle === "weekly") tl = "<span style=\"font-size:12px;color:#3b82f6\">\uD83D\uDD04 " + (wd[job.schedule.weekday || 1] || "\u5468\u4E00") + " " + (job.schedule.time || "") + "</span>";
+        else if (job.schedule.cycle === "monthly") tl = "<span style=\"font-size:12px;color:#3b82f6\">\uD83D\uDD04 \u6BCF\u6708" + (job.schedule.monthday || 1) + "\u65E5 " + (job.schedule.time || "") + "</span>";
+      }
+      var sc = job.status === "done" ? "\u5DF2\u5B8C\u6210" : job.status === "in-progress" ? "\u8FDB\u884C\u4E2D" : "\u672A\u5F00\u59CB";
+      var sc_cls = job.status === "done" ? "bg-green-50 text-green-600 border-green-200" : job.status === "in-progress" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-slate-50 text-slate-500 border-slate-200";
+      html += "<div style=\"background:#fff;border-radius:16px;border:1px solid #e2e8f0;padding:18px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.04)\">" +
+        "<div style=\"display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px\">" +
+        "<div style=\"display:flex;align-items:center;gap:12px\">" +
+        "<span style=\"font-size:24px\">" + esc(job.agent) + "</span>" +
+        "<div><div style=\"display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap\">" +
+        "<span style=\"font-weight:700;color:#1e293b;font-size:15px\">" + esc(job.title) + "</span>" + tl +
+        (job.excard ? "<span style=\"font-size:11px;padding:2px 8px;border-radius:12px;background:#f5f3ff;color:#7c3aed\">" + esc(job.excard) + "</span>" : "") +
+        "<span style=\"font-size:11px;padding:2px 8px;border-radius:12px;" + sc_cls + "\">" + sc + "</span></div>" +
+        "<p style=\"font-size:12px;color:#94a3b8;margin:0\">" + esc(job.description) + "</p></div></div>" +
+        "<div style=\"display:flex;align-items:flex-start;gap:8px;flex-shrink:0\">" +
+        "<button onclick=\"editJob(\'" + job.id + "\')\" style=\"width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#94a3b8;border:1px solid #e2e8f0;background:#fff;cursor:pointer\" title=\"\u7F16\u8F91\u5DE5\u4F5C\">\u270E</button>" +
+        "<button onclick=\"deleteJob(\'" + job.id + "\')\" style=\"width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#94a3b8;border:1px solid #e2e8f0;background:#fff;cursor:pointer\" title=\"\u5220\u9664\u5DE5\u4F5C\u5219\">\u2715</button>" +
+        "<div style=\"text-align:right;flex-shrink:0;margin-left:8px\">" +
+        "<div style=\"font-size:18px;font-weight:700;color:#1e293b\">" + dc + "/" + tc + "</div>" +
+        "<div style=\"font-size:11px;color:#94a3b8\">\u4EFB\u52A1\u5B8C\u6210</div></div></div>" + "</div>" +
+        "<div style=\"margin-bottom:14px\">" +
+        "<div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:6px\">" +
+        "<span style=\"font-size:12px;color:#64748b\">\u8FDB\u5EA6</span>" +
+        "<span style=\"font-size:13px;font-weight:600;color:" + (pct === 100 ? "#22c55e" : "#3b82f6") + "\">" + pct + "%</span></div>" +
+        "<div style=\"height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden\">" +
+        "<div style=\"height:100%;border-radius:3px;width:" + pct + "%;background:" + (job.status === "done" ? "#22c55e" : job.status === "in-progress" ? "#3b82f6" : "#cbd5e1") + ";transition:width 0.4s\"></div></div>" + "</div>" +
+        "<div style=\"display:flex;flex-wrap:wrap;gap:6px\">";
+      (job._t || []).forEach(function(t) {
+        var tc2 = t.status === "done" ? "bg-green-50 text-green-600 border-green-200" : t.status === "in-progress" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-slate-50 text-slate-600 border-slate-200";
+        html += "<span style=\"font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid " + tc2.split(" ")[2] + ";" + tc2.split(" ")[0] + " " + tc2.split(" ")[1] + "\">" + esc(t.title) + "</span>";
+      });
+      if ((job._t || []).length === 0) html += "<span style=\"font-size:12px;color:#cbd5e1\">\u6682\u65E0\u4EFB\u52A1</span>";
+      html += "</div></div>";
+    });
+  }
+  html += "</div></div>";
+  c.innerHTML = html;
+}
+
+// ===== EXCARD =====
+function renderExcard(c) {
+  var filtered = EXCARDS;
+  var lbl = "\u5168\u90E8\u6A21\u677F";
+  if (ctx) {
+    if (ctx.t === "ag") {
+      var ag = AGENTS.find(function(a) { return a.id === ctx.id; });
+      lbl = (ag && ag.name || "") + " \u7684\u6A21\u677F";
+      filtered = EXCARDS.filter(function(ec) { return ec.owner === (ag && ag.name); });
+    } else if (ctx.t === "group") {
+      var sess = SESSIONS.find(function(s) { return s.id === ctx.id && s.type === "group"; });
+      lbl = (sess && sess.name || "") + " \u6D89\u53CA\u7684\u6A21\u677F";
+      var mems = sess && sess.agentIds ? sess.agentIds.map(function(id) {
+        var a = AGENTS.find(function(x) { return x.id === id; });
+        return a && a.name;
+      }).filter(Boolean) : [];
+      filtered = EXCARDS.filter(function(ec) { return mems.indexOf(ec.owner) >= 0; });
+    }
+  }
+  var bs = "padding:8px 16px;background:#3b82f6;border:none;color:#fff;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;box-shadow:0 2px 6px rgba(59,130,246,0.25)";
+  var html = "<div style=\"display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden\">" +
+    "<div style=\"padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#fff;border-bottom:1px solid #f1f5f9\">" +
+    "<div><h2 style=\"font-size:18px;font-weight:700;color:#1e293b;margin:0\">" + lbl + "</h2>" +
+    "<p style=\"font-size:13px;color:#94a3b8;margin:2px 0 0 0\">" + filtered.length + " \u4E2A\u6A21\u677F</p></div>" +
+    "<button onclick=\"openNewExCard()\" style=\"" + bs + "\">+ \u65B0\u5EFA\u6A21\u677F</button></div>" +
+    "<div style=\"flex:1;overflow-y:auto;padding:20px 24px;background:#f8fafc\">";
+
+  if (filtered.length === 0) {
+    html += "<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:#94a3b8\">" +
+      "<div style=\"font-size:48px;margin-bottom:12px\">\uD83D\uDCE6</div>" +
+      "<div style=\"font-size:16px;font-weight:500;margin-bottom:4px\">\u6682\u65E0\u6A21\u677F</div>" +
+      "<div style=\"font-size:13px\">\u9009\u62E9\u4E00\u4E2AAgent\u6216\u7FA4\u804A\u67E5\u770B\u6A21\u677F</div></div>";
+  } else {
+    html += "<div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px\">";
+    filtered.forEach(function(ec) {
+      var tags = ec.tags.map(function(t) {
+        return "<span style=\"font-size:11px;padding:2px 8px;background:#f1f5f9;color:#64748b;border-radius:6px\">" + esc(t) + "</span>";
+      }).join("");
+      var steps = ec.steps.map(function(s, i) {
+        return "<span style=\"font-size:11px;padding:2px 8px;background:#eff6ff;color:#3b82f6;border-radius:6px\">" + (i + 1) + ". " + esc(s) + "</span>";
+      }).join("");
+      html += "<div style=\"background:#fff;border-radius:16px;border:1px solid #e2e8f0;padding:18px;transition:all 0.15s;cursor:pointer\" onmouseover=\"this.style.boxShadow='0 4px 16px rgba(0,0,0,0.08)';this.style.borderColor='#bfdbfe'\" onmouseout=\"this.style.boxShadow='none';this.style.borderColor='#e2e8f0'\">" +
+        "<div style=\"display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px\">" +
+        "<div style=\"flex:1;min-width:0\">" +
+        "<div style=\"display:flex;align-items:center;gap:8px;margin-bottom:6px\">" +
+        "<span style=\"font-size:11px;font-family:monospace;color:#94a3b8;background:#f1f5f9;padding:1px 6px;border-radius:4px\">" + esc(ec.id) + "</span>" +
+        "<span style=\"font-size:11px;padding:1px 6px;background:#f1f5f9;color:#64748b;border-radius:6px\">" + esc(ec.owner) + "</span></div>" +
+        "<h3 style=\"font-weight:700;color:#1e293b;font-size:15px;margin:0 0 4px 0\">" + esc(ec.name) + "</h3>" +
+        "<p style=\"font-size:13px;color:#64748b;margin:0;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden\">" + esc(ec.description) + "</p></div>" +
+        "<div style=\"display:flex;gap:4px;flex-shrink:0;margin-left:8px\">" +
+        "<button onclick=\"event.stopPropagation();editExCard('" + ec.id + "')\" style=\"width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;border:1px solid #e2e8f0;background:#fff;cursor:pointer\">\u270E</button>" +
+        "<button onclick=\"event.stopPropagation();deleteExCard('" + ec.id + "')\" style=\"width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;border:1px solid #e2e8f0;background:#fff;cursor:pointer\">\u2715</button></div></div>" +
+        "<div style=\"display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px\">" + tags + "</div>" +
+        "<div style=\"border-top:1px solid #f1f5f9;padding-top:12px\">" +
+        "<p style=\"font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 8px 0\">\u6B65\u9AA4\u6D41\u7A0B</p>" +
+        "<div style=\"display:flex;flex-wrap:wrap;gap:4px\">" + steps + "</div></div></div>";
+    });
+    html += "</div>";
+  }
+  html += "</div></div>";
+  c.innerHTML = html;
+}
+
+function editExCard(id) { alert("\u7F16\u8F91\u6A21\u677F\u6F14\u793A\uFF1A" + id); }
+function deleteExCard(id) { if (confirm("\u786E\u5B9A\u5220\u9664\u6A21\u677F " + id + " \u5417\uFF1F")) alert("\u5220\u9664\u6F14\u793A\uFF1A" + id); }
+
+// ===== MONITOR =====
+function renderMonitor(c) {
+  var sdot = {online: "#4ade80", busy: "#facc15", offline: "#cbd5e1"};
+  var scol = {online: "#22c55e", busy: "#eab308", offline: "#94a3b8"};
+  var stxt = {online: "\u5728\u7EBF", busy: "\u5FD9\u788C", offline: "\u79BB\u7EBF"};
+  var sback = {online: "#f0fdf4", busy: "#fefce8", offline: "#f8fafc"};
+  var sborder = {online: "#bbf7d0", busy: "#fef08a", offline: "#e2e8f0"};
+  var tokens = [12400, 8901, 1203, 0, 3400];
+  var tmax = 10000;
+  var ac = AGENTS.map(function(a, i) {
+    var pct = Math.min(100, Math.round(tokens[i] / tmax * 100));
+    var bar = pct > 80 ? "#ef4444" : pct > 50 ? "#f59e0b" : "#3b82f6";
+    return "<div style=\"border-radius:16px;border:1px solid " + sborder[a.status] + ";padding:18px 20px;background:" + sback[a.status] + "\">" +
+      "<div style=\"display:flex;align-items:center;justify-content:space-between;margin-bottom:14px\">" +
+      "<div style=\"display:flex;align-items:center;gap:12px\">" +
+      "<div style=\"position:relative\"><div style=\"width:44px;height:44px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 6px rgba(0,0,0,0.08)\">" + a.avatar + "</div>" +
+      "<span style=\"position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;border:2px solid " + sback[a.status] + ";background:" + sdot[a.status] + "\"></span></div>" +
+      "<div><div style=\"font-weight:700;color:#1e293b;font-size:15px\">" + esc(a.name) + "</div><div style=\"font-size:12px;color:" + scol[a.status] + "\">" + stxt[a.status] + "</div></div>" + "</div>" +
+      "<div style=\"text-align:right\"><div style=\"font-size:20px;font-weight:700;color:" + scol[a.status] + "\">" + tokens[i].toLocaleString() + "</div><div style=\"font-size:11px;color:#94a3b8\">/ " + tmax.toLocaleString() + " tokens</div></div>" + "</div>" +
+      "<div style=\"height:6px;background:#fff;border-radius:3px;overflow:hidden;margin-bottom:6px\">" +
+      "<div style=\"height:100%;border-radius:3px;width:" + pct + "%;background:" + bar + ";transition:width 0.4s\"></div></div>" +
+      "<div style=\"display:flex;align-items:center;justify-content:space-between\">" +
+      "<span style=\"font-size:11px;color:#64748b\">Token \u6D88\u8017</span>" +
+      "<span style=\"font-size:12px;font-weight:600;color:" + (pct > 80 ? "#ef4444" : "#64748b") + "\">" + pct + "%</span></div></div>";
+  }).join("");
+  var logs = [
+    {t: "18:42:01", lv: "INFO", ag: "\u5F00\u5F00", msg: "Agent \u5DF2\u8FDE\u63A5\uFF0C\u5F53\u524D\u7A7A\u95F2"},
+    {t: "18:41:55", lv: "INFO", ag: "\u524D\u524D", msg: "\u5B8C\u6210\u524D\u7AEF\u9879\u76EE\u521D\u59CB\u5316\uFF0Cnpm install \u6210\u529F"},
+    {t: "18:41:30", lv: "WARN", ag: "\u54C1\u54C1", msg: "Token \u6D88\u8017\u8D85\u8FC7 80%\uFF0C\u8BF7\u6CE8\u610F"},
+    {t: "18:41:10", lv: "INFO", ag: "\u6D4B\u6D4B", msg: "\u6D4B\u8BD5\u7528\u4F8B\u6267\u884C\u5B8C\u6210\uFF0C2 \u4E2A\u5931\u8D25"},
+    {t: "18:40:55", lv: "INFO", ag: "\u5F00\u5F00", msg: "OpenClaw Adapter healthCheck \u901A\u8FC7"},
+    {t: "18:40:30", lv: "ERROR", ag: "\u7EF4\u7EF4", msg: "\u8FDE\u63A5\u8D85\u65F6\uFF0C\u6846\u67B6\u65E0\u54CD\u5E94"},
+  ];
+  var lc = {INFO: "#dbeafe #2563eb", WARN: "#fef9c3 #ca8a04", ERROR: "#fee2e2 #dc2626"};
+  var lhtml = logs.map(function(l) {
+    return "<div style=\"display:flex;align-items:start;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9\">" +
+      "<span style=\"font-size:11px;color:#94a3b8;flex-shrink:0;width:60px;padding-top:2px\">" + l.t + "</span>" +
+      "<span style=\"font-size:10px;padding:2px 7px;border-radius:6px;font-weight:600;flex-shrink:0;background:" + lc[l.lv].split(" ")[0] + ";color:" + lc[l.lv].split(" ")[1] + "\">" + l.lv + "</span>" +
+      "<span style=\"font-size:12px;color:#64748b;flex-shrink:0;width:44px\">" + l.ag + "</span>" +
+      "<span style=\"font-size:13px;color:#1e293b\">" + l.msg + "</span></div>";
+  }).join("");
+  var html = "<div style=\"display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;background:#f8fafc\">" +
+    "<div style=\"padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#fff;border-bottom:1px solid #f1f5f9\">" +
+    "<div><h2 style=\"font-size:18px;font-weight:700;color:#1e293b;margin:0\">\u76D1\u63A7\u9762\u677F</h2>" +
+    "<p style=\"font-size:13px;color:#94a3b8;margin:2px 0 0 0\">\u5B9E\u65F6\u72B6\u6001 \u00B7 Token \u6D88\u8017 \u00B7 \u6D3B\u52A8\u65E5\u5FD7</p></div>" +
+    "<button onclick=\"renderTab()\" style=\"padding:8px 14px;background:#fff;border:1px solid #e2e8f0;color:#475569;border-radius:10px;font-size:13px;cursor:pointer\">\u21BB \u5237\u65B0</button></div>" +
+    "<div style=\"flex:1;overflow-y:auto;padding:20px 24px\">" +
+    "<div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:20px\">" + ac + "</div>" +
+    "<div style=\"background:#fff;border-radius:16px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.04);overflow:hidden\">" +
+    "<div style=\"padding:14px 18px;border-bottom:1px solid #f1f5f9\">" +
+    "<h3 style=\"font-size:14px;font-weight:600;color:#1e293b;margin:0\">\u5B9E\u65F6\u65E5\u5FD7</h3></div>" +
+    "<div style=\"max-height:240px;overflow-y:auto\">" + lhtml + "</div></div></div></div>";
+  c.innerHTML = html;
+}
+
+// ===== SETTINGS =====
+function renderSettings(c) {
+  var connHtml = CONNECTIONS.map(function(conn) {
+    return "<div style=\"display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #f1f5f9\">" +
+      "<div style=\"display:flex;align-items:center;gap:14px\">" +
+      "<div style=\"width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(59,130,246,0.25)\">\uD83E\uDD9E</div>" +
+      "<div><div style=\"font-weight:600;color:#1e293b;font-size:14px\">" + esc(conn.name) + "</div><div style=\"font-size:12px;color:#94a3b8\">" + esc(conn.url) + "</div></div>" + "</div>" +
+      "<div style=\"display:flex;align-items:center;gap:16px\">" +
+      "<div style=\"text-align:right\"><div style=\"display:flex;align-items:center;gap:6px\">" +
+      "<span style=\"width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block\"></span>" +
+      "<span style=\"font-size:13px;color:#22c55e;font-weight:500\">\u5DF2\u8FDE\u63A5</span></div>" +
+      "<div style=\"font-size:11px;color:#94a3b8;margin-top:2px\">\u5FC3\u8DF3 " + esc(conn.lastHeartbeat) + "</div></div>" +
+      "<button style=\"padding:6px 12px;font-size:12px;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer\">\u7F16\u8F91</button></div></div>";
+  }).join("");
+  var fws = [
+    {id: "openclaw", icon: "\uD83E\uDD9E", name: "OpenClaw", desc: "\u652F\u6301 sessions / cron / tools"},
+    {id: "deerflow", icon: "\uD83E\uDDCC", name: "DeerFlow", desc: "REST API + Webhook"},
+    {id: "hermes", icon: "\uD83D\uDC3A", name: "Hermes Agent", desc: "CLI / Python API"},
+  ];
+  var fwHtml = fws.map(function(f) {
+    return "<div onclick=\"selFw('" + f.id + "')\" style=\"display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:12px;border:1px solid #e2e8f0;cursor:pointer;transition:all 0.15s;margin-bottom:8px;background:#fff\" onmouseover=\"this.style.borderColor='#94a3b8';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.06)'\" onmouseout=\"this.style.borderColor='#e2e8f0';this.style.boxShadow='none'\">" +
+      "<div style=\"display:flex;align-items:center;gap:12px\"><div style=\"font-size:28px\">" + f.icon + "</div>" +
+      "<div><div style=\"font-weight:600;color:#1e293b;font-size:14px\">" + f.name + "</div><div style=\"font-size:12px;color:#94a3b8\">" + f.desc + "</div></div>" + "</div>" +
+      "<div style=\"color:#94a3b8;font-size:16px\">\u2192</div></div>";
+  }).join("");
+  var html = "<div style=\"flex:1;overflow-y:auto;padding:24px;background:#f8fafc\">" +
+    "<div style=\"max-width:640px\">" +
+    "<div style=\"margin-bottom:20px\"><h2 style=\"font-size:20px;font-weight:700;color:#1e293b;margin:0 0 4px 0\">\u8BBE\u7F6E</h2>" +
+    "<p style=\"font-size:13px;color:#94a3b8;margin:0\">\u7BA1\u7406\u6846\u67B6\u914D\u5BF9\u4E0E\u7CFB\u7EDF\u914D\u7F6E</p></div>" +
+    "<div style=\"background:#fff;border-radius:16px;border:1px solid #e2e8f0;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.04);overflow:hidden\">" +
+    "<div style=\"padding:14px 18px;border-bottom:1px solid #f1f5f9\">" +
+    "<h3 style=\"font-size:14px;font-weight:600;color:#1e293b;margin:0\">\u5DF2\u8FDE\u63A5\u7684\u6846\u67B6</h3></div>" + connHtml + "</div>" +
+    "<div style=\"background:#fff;border-radius:16px;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.04);overflow:hidden\">" +
+    "<div style=\"padding:14px 18px;border-bottom:1px solid #f1f5f9\">" +
+    "<h3 style=\"font-size:14px;font-weight:600;color:#1e293b;margin:0\">\u6DFB\u52A0\u65B0\u6846\u67B6</h3></div>" +
+    "<div style=\"padding:14px 16px\" id=\"fw-list\">" + fwHtml + "</div>" +
+    "<div id=\"fw-form\" style=\"padding:0 16px 16px;display:none\">" +
+    "<div style=\"border-top:1px solid #f1f5f9;padding-top:14px\">" +
+    "<h4 id=\"fw-ftitle\" style=\"font-size:14px;font-weight:600;color:#1e293b;margin:0 0 12px 0\">\u914D\u7F6E\u8FDE\u63A5</h4>" +
+    "<div style=\"display:flex;flex-direction:column;gap:10px\">" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u8FDE\u63A5\u540D\u79F0</label>" +
+    "<input id=\"conn-name\" type=\"text\" placeholder=\"例\u5982: \u6211\u7684OpenClaw\" style=\"width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box\"></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">Gateway URL</label>" +
+    "<input id=\"conn-url\" type=\"text\" placeholder=\"http://localhost:18789\" style=\"width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box\"></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">Token</label>" +
+    "<input id=\"conn-token\" type=\"password\" placeholder=\"输\u5165 Token\" style=\"width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box\"></div>" +
+    "<div id=\"test-result\" style=\"display:none;padding:10px 12px;border-radius:10px;font-size:13px\"></div>" +
+    "<div style=\"display:flex;gap:8px;padding-top:4px\">" +
+    "<button id=\"test-btn\" onclick=\"testConn()\" style=\"padding:8px 16px;background:#f1f5f9;border:none;border-radius:10px;font-size:13px;font-weight:500;color:#475569;cursor:pointer\">\u6D4B\u8BD5\u8FDE\u63A5</button>" +
+    "<button onclick=\"saveConn()\" style=\"padding:8px 16px;background:#3b82f6;border:none;border-radius:10px;font-size:13px;font-weight:500;color:#fff;cursor:pointer\">\u4FDD\u5B58</button></div></div></div></div></div></div>";
+  c.innerHTML = html;
+}
+
+function selFw(id) {
+  var names = {openclaw: "OpenClaw", deerflow: "DeerFlow", hermes: "Hermes Agent"};
+  document.getElementById("fw-form").style.display = "block";
+  document.getElementById("fw-ftitle").textContent = "\u914D\u7F6E " + names[id];
+  document.getElementById("test-result").style.display = "none";
+}
+
+async function testConn() {
+  var url = document.getElementById("conn-url") && document.getElementById("conn-url").value || "";
+  var btn = document.getElementById("test-btn");
+  var res = document.getElementById("test-result");
+  btn.disabled = true; btn.textContent = "\u6D4B\u8BD5\u4E2D...";
+  await new Promise(function(r) { setTimeout(r, 1500); });
+  var ok = url.indexOf("localhost") >= 0;
+  res.style.display = "block";
+  res.style.background = ok ? "#f0fdf4" : "#fef2f2";
+  res.style.color = ok ? "#16a34a" : "#dc2626";
+  res.textContent = ok ? "\u2713 \u8FDE\u63A5\u6210\u529F\uFF01" : "\u2717 \u8FDE\u63A5\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5 URL \u548C Token";
+  btn.disabled = false; btn.textContent = "\u6D4B\u8BD5\u8FDE\u63A5";
+}
+function saveConn() { alert("\u8FDE\u63A5\u5DF2\u4FDD\u5B58\uFF08\u539F\u578B\u6F14\u793A\uFF09"); }
+
+// ===== MODALS =====
+function mb() { return "<div onclick=\"if(event.target===this)closeModal()\" style=\"position:fixed;inset:0;background:rgba(0,0,0,0.35);backdrop-filter:blur(2px);z-index:50;display:flex;align-items:center;justify-content:center\"></div>"; }
+function closeModal() { document.getElementById("mw").innerHTML = ""; }
+
+function openNewJob() {
+  var ao = AGENTS.map(function(a) { return "<option value=\"" + esc(a.name) + "\">" + esc(a.name) + "</option>"; }).join("");
+  var eco = "<option value=\"\">\u4E0D\u7ED1\u5B9A</option>" + EXCARDS.map(function(ec) { return "<option value=\"" + esc(ec.id) + "\">" + esc(ec.id) + " - " + esc(ec.name) + "</option>"; }).join("");
+  var inpStyle = "width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box";
+  document.getElementById("mw").innerHTML = mb() + "<div style=\"background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.15);width:100%;max-width:480px;margin:0 16px\">" +
+    "<div style=\"padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between\">" +
+    "<div><h3 style=\"font-size:16px;font-weight:700;color:#1e293b;margin:0\">\u65B0\u5EFA\u5DE5\u4F5C</h3><p style=\"font-size:12px;color:#94a3b8;margin:2px 0 0 0\">\u53EF\u7ED1\u5B9A ExCard \u5B9A\u4E49\u6267\u884C\u6D41\u7A0B</p></div>" +
+    "<button onclick=\"closeModal()\" style=\"width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:16px;border:none;background:none;cursor:pointer\">\u2715</button></div>" +
+    "<div style=\"padding:16px 20px;display:flex;flex-direction:column;gap:12px\">" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u5DE5\u4F5C\u540D\u79F0</label>" +
+    "<input id=\"nj-title\" type=\"text\" placeholder=\"例\u5982\uFF1AOpenExTeam MVP \u5F00\u53D1\" style=\"" + inpStyle + "\"></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:6px\">\u7C7B\u578B</label>" +
+    "<div style=\"display:flex;gap:8px\">" +
+    "<label id=\"type-ot\" onclick=\"setJobType('ot')\" style=\"flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:2px solid #3b82f6;background:#eff6ff;border-radius:10px;cursor:pointer\">" +
+    "<input type=\"radio\" name=\"jt\" value=\"one-time\" checked style=\"display:none\"><span style=\"font-size:13px;font-weight:500;color:#2563eb\">\u26A1 \u4E00\u6B21\u6027\u5DE5\u4F5C</span></label>" +
+    "<label id=\"type-or\" onclick=\"setJobType('or')\" style=\"flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:2px solid #e2e8f0;background:#fff;border-radius:10px;cursor:pointer\">" +
+    "<input type=\"radio\" name=\"jt\" value=\"recurring\" style=\"display:none\"><span style=\"font-size:13px;color:#64748b\">\uD83D\uDD04 \u5468\u671F\u6027</span></label></div></div>" +
+    "<div id=\"rec-fields\" style=\"display:none\">" +
+    "<label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u5468\u671F</label>" +
+    "<select id=\"nj-cycle\" onchange=\"toggleRec()\" style=\"" + inpStyle + "\">" +
+    "<option value=\"daily\">\u6BCF\u5929</option><option value=\"weekly\">\u6BCF\u5468</option><option value=\"monthly\">\u6BCF\u6708</option></select>" +
+    "<div id=\"daily-time\"><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin:8px 0 4px 0\">\u89E6\u53D1\u65F6\u95F4</label>" +
+    "<input id=\"nj-time-d\" type=\"time\" value=\"09:00\" style=\"" + inpStyle + "\"></div>" +
+    "<div id=\"weekly-time\" style=\"display:none\"><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin:8px 0 4px 0\">\u89E6\u53D1\u65F6\u95F4</label>" +
+    "<div style=\"display:flex;gap:8px\">" +
+    "<select id=\"nj-weekday\" style=\"flex:1;" + inpStyle + "\">" +
+    "<option value=\"1\">\u5468\u4E00</option><option value=\"2\">\u5468\u4E8C</option><option value=\"3\">\u5468\u4E09</option><option value=\"4\">\u5468\u56DB</option><option value=\"5\">\u5468\u4E94</option><option value=\"6\">\u5468\u516D</option><option value=\"0\">\u5468\u65E5</option></select>" +
+    "<input id=\"nj-time-w\" type=\"time\" value=\"09:00\" style=\"flex:1;" + inpStyle + "\"></div></div>" +
+    "<div id=\"monthly-time\" style=\"display:none\"><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin:8px 0 4px 0\">\u89E6\u53D1\u65F6\u95F4</label>" +
+    "<div style=\"display:flex;gap:8px;align-items:center\">" +
+    "<input id=\"nj-monthday\" type=\"number\" min=\"1\" max=\"28\" value=\"1\" style=\"width:70px;" + inpStyle + "\">" +
+    "<span style=\"font-size:13px;color:#64748b\">\u65E5</span>" +
+    "<input id=\"nj-time-m\" type=\"time\" value=\"09:00\" style=\"flex:1;" + inpStyle + "\"></div></div>" + "</div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u63CF\u8FF0</label>" +
+    "<textarea id=\"nj-desc\" rows=\"2\" placeholder=\"描\u8FF0\u5DE5\u4F5C\u76EE\u6807\" style=\"" + inpStyle + ";resize:none\"></textarea></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u8D1F\u8D23\u4EBA</label>" +
+    "<select id=\"nj-agent\" style=\"" + inpStyle + "\">" + ao + "</select></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u7ED1\u5B9A ExCard</label>" +
+    "<select id=\"nj-excard\" style=\"" + inpStyle + "\">" + eco + "</select></div></div>" +
+    "<div style=\"padding:14px 20px;border-top:1px solid #f1f5f9;display:flex;justify-content:flex-end;gap:8px\">" +
+    "<button onclick=\"closeModal()\" style=\"padding:8px 16px;background:#fff;border:1px solid #e2e8f0;color:#475569;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer\">\u53D6\u6D88</button>" +
+    "<button onclick=\"saveNewJob()\" style=\"padding:8px 16px;background:#3b82f6;border:none;color:#fff;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer\">\u521B\u5EFA</button></div></div>";
+}
+
+function setJobType(t) {
+  if (t === "ot") {
+    document.getElementById("type-ot").style.borderColor = "#3b82f6";
+    document.getElementById("type-ot").style.background = "#eff6ff";
+    document.getElementById("type-or").style.borderColor = "#e2e8f0";
+    document.getElementById("type-or").style.background = "#fff";
+    document.getElementById("rec-fields").style.display = "none";
+  } else {
+    document.getElementById("type-or").style.borderColor = "#3b82f6";
+    document.getElementById("type-or").style.background = "#eff6ff";
+    document.getElementById("type-ot").style.borderColor = "#e2e8f0";
+    document.getElementById("type-ot").style.background = "#fff";
+    document.getElementById("rec-fields").style.display = "block";
+    toggleRec();
+  }
+}
+
+function toggleRec() {
+  var cy = (document.getElementById("nj-cycle") && document.getElementById("nj-cycle").value) || "daily";
+  document.getElementById("daily-time").style.display = cy === "daily" ? "block" : "none";
+  document.getElementById("weekly-time").style.display = cy === "weekly" ? "block" : "none";
+  document.getElementById("monthly-time").style.display = cy === "monthly" ? "block" : "none";
+}
+
+function saveNewJob() {
+  var title = document.getElementById("nj-title") && document.getElementById("nj-title").value.trim();
+  if (!title) return;
+  var type = (document.querySelector('input[name="jt"]:checked') && document.querySelector('input[name="jt"]:checked').value) || "one-time";
+  var schedule = null;
+  if (type === "recurring") {
+    var cy = (document.getElementById("nj-cycle") && document.getElementById("nj-cycle").value) || "daily";
+    var ti = "09:00";
+    if (cy === "daily") ti = (document.getElementById("nj-time-d") && document.getElementById("nj-time-d").value) || "09:00";
+    else if (cy === "weekly") ti = (document.getElementById("nj-time-w") && document.getElementById("nj-time-w").value) || "09:00";
+    else if (cy === "monthly") ti = (document.getElementById("nj-time-m") && document.getElementById("nj-time-m").value) || "09:00";
+    schedule = {cycle: cy, time: ti};
+    if (cy === "weekly") schedule.weekday = parseInt((document.getElementById("nj-weekday") && document.getElementById("nj-weekday").value) || "1");
+    if (cy === "monthly") schedule.monthday = parseInt((document.getElementById("nj-monthday") && document.getElementById("nj-monthday").value) || "1");
+  }
+  _jobs.push({
+    id: "job-" + Date.now(),
+    title: title,
+    description: (document.getElementById("nj-desc") && document.getElementById("nj-desc").value) || "",
+    agent: (document.getElementById("nj-agent") && document.getElementById("nj-agent").value) || AGENTS[0].name,
+    type: type,
+    cycle: type === "recurring" && schedule ? schedule.cycle : null,
+    schedule: schedule,
+    excard: (document.getElementById("nj-excard") && document.getElementById("nj-excard").value) || null,
+    status: "todo",
+    createdAt: new Date().toLocaleString("zh-CN")
+  });
+  closeModal();
+  switchTab("task");
+}
+
+function openNewTask() {
+  var jo = _jobs.map(function(j) { return "<option value=\"" + j.id + "\">" + esc(j.title) + "</option>"; }).join("");
+  var ao = AGENTS.map(function(a) { return "<option value=\"" + esc(a.name) + "\">" + esc(a.name) + "</option>"; }).join("");
+  var eco = "<option value=\"\">\u7EE7\u627F\u81EA Job</option>" + EXCARDS.map(function(ec) { return "<option value=\"" + esc(ec.id) + "\">" + esc(ec.id) + " - " + esc(ec.name) + "</option>"; }).join("");
+  var inpStyle = "width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box";
+  document.getElementById("mw").innerHTML = mb() + "<div style=\"background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.15);width:100%;max-width:480px;margin:0 16px\">" +
+    "<div style=\"padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between\">" +
+    "<h3 style=\"font-size:16px;font-weight:700;color:#1e293b;margin:0\">\u65B0\u5EFA\u4EFB\u52A1</h3>" +
+    "<button onclick=\"closeModal()\" style=\"width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:16px;border:none;background:none;cursor:pointer\">\u2715</button></div>" +
+    "<div style=\"padding:16px 20px;display:flex;flex-direction:column;gap:12px\">" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u6240\u5C5E\u5DE5\u4F5C</label>" +
+    "<select id=\"nt-job\" style=\"" + inpStyle + "\">" + jo + "</select></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u4EFB\u52A1\u6807\u9898</label>" +
+    "<input id=\"nt-title\" type=\"text\" placeholder=\"输\u5165\u4EFB\u52A1\u6807\u9898\" style=\"" + inpStyle + "\"></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u63CF\u8FF0</label>" +
+    "<textarea id=\"nt-desc\" rows=\"2\" placeholder=\"输\u5165\u4EFB\u52A1\u63CF\u8FF0\" style=\"" + inpStyle + ";resize:none\"></textarea></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u8D1F\u8D23\u4EBA</label>" +
+    "<select id=\"nt-agent\" style=\"" + inpStyle + "\">" + ao + "</select></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u7ED1\u5B9A ExCard\uFF08\u53EF\u9009\uFF09</label>" +
+    "<select id=\"nt-excard\" style=\"" + inpStyle + "\">" + eco + "</select></div></div>" +
+    "<div style=\"padding:14px 20px;border-top:1px solid #f1f5f9;display:flex;justify-content:flex-end;gap:8px\">" +
+    "<button onclick=\"closeModal()\" style=\"padding:8px 16px;background:#fff;border:1px solid #e2e8f0;color:#475569;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer\">\u53D6\u6D88</button>" +
+    "<button onclick=\"saveNewTask()\" style=\"padding:8px 16px;background:#3b82f6;border:none;color:#fff;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer\">\u521B\u5EFA</button></div></div>";
+}
+
+function saveNewTask() {
+  var title = document.getElementById("nt-title") && document.getElementById("nt-title").value.trim();
+  if (!title) return;
+  _tasks.push({
+    id: "task-" + Date.now(),
+    jobId: (document.getElementById("nt-job") && document.getElementById("nt-job").value) || _jobs[0].id,
+    title: title,
+    description: (document.getElementById("nt-desc") && document.getElementById("nt-desc").value) || "",
+    agent: (document.getElementById("nt-agent") && document.getElementById("nt-agent").value) || AGENTS[0].name,
+    excard: (document.getElementById("nt-excard") && document.getElementById("nt-excard").value) || null,
+    status: "todo",
+    createdAt: new Date().toLocaleString("zh-CN")
+  });
+  closeModal();
+  switchTab("task");
+}
+
+function openNewExCard() {
+  var ao = AGENTS.map(function(a) { return "<option value=\"" + esc(a.name) + "\">" + esc(a.name) + "</option>"; }).join("");
+  var inpStyle = "width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box";
+  document.getElementById("mw").innerHTML = mb() + "<div style=\"background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.15);width:100%;max-width:480px;margin:0 16px\">" +
+    "<div style=\"padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between\">" +
+    "<h3 style=\"font-size:16px;font-weight:700;color:#1e293b;margin:0\">\u65B0\u5EFA ExCard \u6A21\u677F</h3>" +
+    "<button onclick=\"closeModal()\" style=\"width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:16px;border:none;background:none;cursor:pointer\">\u2715</button></div>" +
+    "<div style=\"padding:16px 20px;display:flex;flex-direction:column;gap:12px\">" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u6A21\u677FID</label>" +
+    "<input id=\"ec-id\" type=\"text\" placeholder=\"例\u5982 ec-007\" style=\"" + inpStyle + "\"></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u6A21\u677F\u540D\u79F0</label>" +
+    "<input id=\"ec-name\" type=\"text\" placeholder=\"例\u5982 \u4EE3\u7801\u5BA1\u67E5\u6D41\u7A0B\" style=\"" + inpStyle + "\"></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u63CF\u8FF0</label>" +
+    "<textarea id=\"ec-desc\" rows=\"2\" placeholder=\"描\u8FF0\u6A21\u677F\u7528\u9014\" style=\"" + inpStyle + ";resize:none\"></textarea></div>" +
+    "<div><label style=\"display:block;font-size:13px;font-weight:500;color:#374151;margin-bottom:4px\">\u8D1F\u8D23\u4EBA</label>" +
+    "<select id=\"ec-owner\" style=\"" + inpStyle + "\">" + ao + "</select></div></div>" +
+    "<div style=\"padding:14px 20px;border-top:1px solid #f1f5f9;display:flex;justify-content:flex-end;gap:8px\">" +
+    "<button onclick=\"closeModal()\" style=\"padding:8px 16px;background:#fff;border:1px solid #e2e8f0;color:#475569;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer\">\u53D6\u6D88</button>" +
+    "<button onclick=\"saveNewExCard()\" style=\"padding:8px 16px;background:#3b82f6;border:none;color:#fff;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer\">\u521B\u5EFA</button></div></div>";
+}
+
+function saveNewExCard() {
+  var id = (document.getElementById("ec-id") && document.getElementById("ec-id").value.trim()) || "";
+  var name = (document.getElementById("ec-name") && document.getElementById("ec-name").value.trim()) || "";
+  var desc = (document.getElementById("ec-desc") && document.getElementById("ec-desc").value.trim()) || "";
+  var owner = (document.getElementById("ec-owner") && document.getElementById("ec-owner").value) || AGENTS[0].name;
+  if (!id || !name) return;
+  EXCARDS.push({id: id, name: name, description: desc, tags: ["\u81EA\u5B9A\u4E49"], owner: owner, steps: ["\u6B65\u9AA41", "\u6B65\u9AA42"]});
+  closeModal();
+  switchTab("excard");
+}
+</script>
+</body>
+</html>
+
+// 启动任务 - 发送任务消息给对应Agent
+function startTask(taskId) {
+  var task = _tasks.find(function(t) { return t.id === taskId; });
+  if (!task) return;
+  
+  // 模拟任务下发
+  var msg = "【任务启动】" + task.title;
+  if (task.description) msg += "\n描述：" + task.description;
+  if (task.excard) msg += "\nExCard：" + task.excard;
+  
+  // 找到对应Agent的会话
+  var agentName = task.agent;
+  var sess = SESSIONS.find(function(s) { 
+    return s.type === "p2p" && s.name === agentName; 
+  });
+  
+  if (sess) {
+    sess.messages.push({
+      sender: "user", 
+      text: msg, 
+      time: new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})
+    });
+    
+    // 模拟Agent回复
+    setTimeout(function() {
+      sess.messages.push({
+        sender: agentName,
+        agentId: sess.agentId,
+        text: "收到任务：" + task.title + "，开始执行...",
+        time: new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})
+      });
+      // 更新任务状态为进行中
+      task.status = "in-progress";
+      renderTab();
+    }, 800);
+    
+    alert("任务已启动，消息已发送给 " + agentName);
+    closeDetail();
+    renderTab();
+  } else {
+    alert("未找到 " + agentName + " 的聊天会话");
+  }
+}
+
+// ===== WORKFLOW =====
+function startJobWorkflow(jobId) {
+  var job = _jobs.find(function(j) { return j.id === jobId; });
+  if (!job) return;
+  
+  // 找到该工作的所有任务，按创建时间排序
+  var jobTasks = _tasks.filter(function(t) { return t.jobId === jobId; });
+  jobTasks.sort(function(a, b) { return new Date(a.createdAt) - new Date(b.createdAt); });
+  
+  if (jobTasks.length === 0) {
+    alert("该工作没有关联任务");
+    return;
+  }
+  
+  // 找到第一个待办的任务
+  var firstTodo = jobTasks.find(function(t) { return t.status === "todo"; });
+  if (!firstTodo) {
+    // 如果没有待办任务，找第一个进行中的
+    firstTodo = jobTasks.find(function(t) { return t.status === "in-progress"; });
+    if (!firstTodo) {
+      alert("该工作所有任务已完成");
+      return;
+    }
+  }
+  
+  // 发送消息给对应Agent
+  var agentName = firstTodo.agent;
+  var sess = SESSIONS.find(function(s) { 
+    return s.type === "p2p" && s.name === agentName; 
+  });
+  
+  if (sess) {
+    var stepNum = jobTasks.indexOf(firstTodo) + 1;
+    var msg = "【工作流启动】" + job.title + "\n";
+    msg += "步骤 #" + stepNum + "/" + jobTasks.length + "：" + firstTodo.title;
+    if (firstTodo.description) msg += "\n" + firstTodo.description;
+    
+    sess.messages.push({
+      sender: "user", 
+      text: msg, 
+      time: new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})
+    });
+    
+    // 模拟Agent回复
+    setTimeout(function() {
+      sess.messages.push({
+        sender: agentName,
+        agentId: sess.agentId,
+        text: "收到工作流任务，开始执行步骤 #" + stepNum + "...",
+        time: new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})
+      });
+      // 更新任务状态为进行中
+      firstTodo.status = "in-progress";
+      job.status = "in-progress";
+      renderTab();
+    }, 800);
+    
+    alert("工作流已启动，步骤 #" + stepNum + " 已发送给 " + agentName);
+    renderTab();
+  } else {
+    alert("未找到 " + agentName + " 的聊天会话");
+  }
+}
+
+// 工作流步骤完成回调（Adapter会调用此函数）
+function onWorkflowStepComplete(jobId, taskId) {
+  var job = _jobs.find(function(j) { return j.id === jobId; });
+  var completedTask = _tasks.find(function(t) { return t.id === taskId; });
+  if (!job || !completedTask) return;
+  
+  // 标记当前任务为完成
+  completedTask.status = "done";
+  
+  // 找到该工作的所有任务，按创建时间排序
+  var jobTasks = _tasks.filter(function(t) { return t.jobId === jobId; });
+  jobTasks.sort(function(a, b) { return new Date(a.createdAt) - new Date(b.createdAt); });
+  
+  // 找到下一个待办任务
+  var nextTask = jobTasks.find(function(t) { return t.status === "todo"; });
+  
+  if (nextTask) {
+    // 自动启动下一步
+    var stepNum = jobTasks.indexOf(nextTask) + 1;
+    var agentName = nextTask.agent;
+    var sess = SESSIONS.find(function(s) { 
+      return s.type === "p2p" && s.name === agentName; 
+    });
+    
+    if (sess) {
+      var msg = "【工作流继续】" + job.title + "\n";
+      msg += "步骤 #" + stepNum + "/" + jobTasks.length + "：" + nextTask.title;
+      if (nextTask.description) msg += "\n" + nextTask.description;
+      
+      sess.messages.push({
+        sender: "user", 
+        text: msg, 
+        time: new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})
+      });
+      
+      setTimeout(function() {
+        sess.messages.push({
+          sender: agentName,
+          agentId: sess.agentId,
+          text: "收到工作流任务，开始执行步骤 #" + stepNum + "...",
+          time: new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})
+        });
+        nextTask.status = "in-progress";
+        renderTab();
+      }, 800);
+    }
+  } else {
+    // 所有任务完成
+    job.status = "done";
+    // 通知所有参与者
+    jobTasks.forEach(function(t) {
+      var sess = SESSIONS.find(function(s) { 
+        return s.type === "p2p" && s.name === t.agent; 
+      });
+      if (sess) {
+        sess.messages.push({
+          sender: "user", 
+          text: "【工作流完成】" + job.title + " 所有步骤已完成！", 
+          time: new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})
+        });
+      }
+    });
+    renderTab();
+  }
+}
