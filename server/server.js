@@ -66,6 +66,9 @@ async function initDb() {
 }
 
 function queryAll(sql, params = []) {
+  if (params == null) params = [];
+  // sql.js 不接受 undefined，转换为 null
+  params = params.map(p => p === undefined ? null : p);
   const stmt = db.prepare(sql);
   if (params.length) stmt.bind(params);
   const results = [];
@@ -74,7 +77,12 @@ function queryAll(sql, params = []) {
   return results;
 }
 function queryGet(sql, params = []) { return queryAll(sql, params)[0] || null; }
-function queryRun(sql, params = []) { db.run(sql, params); saveDb(); }
+function queryRun(sql, params = []) {
+  if (params == null) params = [];
+  params = params.map(p => p === undefined ? null : p);
+  db.run(sql, params);
+  saveDb();
+}
 
 // ================================
 // SSE
