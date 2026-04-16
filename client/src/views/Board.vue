@@ -8,7 +8,7 @@ const props = defineProps({
   agents: { type: Array, required: true },
 })
 
-const emit = defineEmits(['update-task', 'create-task'])
+const emit = defineEmits(['update-task', 'create-task', 'start-job'])
 
 const showCreateModal = ref(false)
 const newTask = ref({ title: '', description: '', agent: '', priority: 'medium', jobId: '' })
@@ -61,6 +61,9 @@ function startTask() {
   if (!selectedTask.value) return
   emit('update-task', selectedTask.value.id, 'in-progress')
   selectedTask.value = { ...selectedTask.value, status: 'in-progress' }
+}
+function startWorkflow(jobId) {
+  emit('start-job', jobId)
 }
 function getTaskStepIndex(task) { return tasksForJob(task.jobId).findIndex(t => t.id === task.id) + 1 }
 function getJobTitle(task) { return props.jobs.find(j => j.id === task.jobId)?.title || '' }
@@ -118,6 +121,7 @@ const statusOptions = [
 
           <div class="flex items-center gap-4 flex-shrink-0">
             <button v-if="tasksForJob(job.id).length > 0"
+              @click="startWorkflow(job.id)"
               class="px-3 py-1.5 bg-green-400 text-white rounded-lg text-xs font-semibold hover:bg-emerald-500 transition-all duration-150 shadow-xs">
               ▶ 启动工作流
             </button>

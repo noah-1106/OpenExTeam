@@ -1,9 +1,8 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useSettingsStore } from '../stores/settings'
 
-const props = defineProps({
-  connections: { type: Array, required: true },
-})
+const settingsStore = useSettingsStore()
 
 const frameworks = [
   { id: 'openclaw', name: 'OpenClaw', icon: '🦞', color: 'blue' },
@@ -13,13 +12,14 @@ const frameworks = [
 
 const selectedFramework = ref('')
 const showAddForm = ref(false)
-const formData = ref({
-  name: '',
-  url: '',
-  token: '',
-})
+const formData = ref({ name: '', url: '', token: '' })
 const testResult = ref(null) // null | 'success' | 'failed'
 const testing = ref(false)
+const saving = ref(false)
+
+onMounted(() => {
+  settingsStore.fetchAdapters()
+})
 
 function selectFramework(fw) {
   selectedFramework.value = fw.id
@@ -29,23 +29,54 @@ function selectFramework(fw) {
 }
 
 async function testConnection() {
+  if (!formData.value.url) return
   testing.value = true
   testResult.value = null
-
-  // Simulate API call
-  await new Promise(resolve => setTimeout(resolve, 1500))
-
-  // Mock result - success if URL contains 'localhost'
-  testResult.value = formData.value.url.includes('localhost') ? 'success' : 'failed'
-  testing.value = false
+  try {
+    const ok = await settingsStore.testAdapter({
+      id: selectedFramework.value,
+      name: formData.value.name,
+      url: formData.value.url,
+      token: formData.value.token,
+    })
+    testResult.value = ok ? 'success' : 'failed'
+  } catch {
+    testResult.value = 'failed'
+  } finally {
+    testing.value = false
+  }
 }
 
-function saveConnection() {
-  // In real app, would save to backend
-  alert('连接已保存（原型演示）')
-  showAddForm.value = false
+async function saveConnection() {
+  saving.value = true
+  try {
+    await settingsStore.saveAdapter({
+      id: selectedFramework.value,
+      name: formData.value.name,
+      url: formData.value.url,
+      token: formData.value.token,
+    })
+    showAddForm.value = false
+    formData.value = { name: '', url: '', token: '' }
+    testResult.value = null
+    selectedFramework.value = ''
+  } catch (err) {
+    alert('保存失败：' + err.message)
+  } finally {
+    saving.value = false
+  }
+}
+
+async function deleteConnection(id) {
+  if (!confirm('确定删除此连接？')) return
+  try {
+    await settingsStore.deleteAdapter(id)
+  } catch (err) {
+    alert('删除失败：' + err.message)
+  }
 }
 </script>
+
 
 <template>
   <div class="max-w-4xl">
@@ -62,7 +93,7 @@ function saveConnection() {
       </div>
       <div class="divide-y divide-gray-50">
         <div
-          v-for="conn in connections"
+          v-for="conn in settingsStore.adapters"
           :key="conn.id"
           class="px-4 py-4 flex items-center justify-between"
         >

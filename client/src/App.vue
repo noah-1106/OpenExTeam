@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import Board from './views/Board.vue'
 import JobView from './views/JobView.vue'
 import Settings from './views/Settings.vue'
@@ -8,8 +8,10 @@ import Monitor from './views/Monitor.vue'
 import Chat from './views/Chat.vue'
 import ExcardView from './views/ExcardView.vue'
 import { useBoardStore } from './stores/board'
+import { useChatStore } from './stores/chat'
 
 const boardStore = useBoardStore()
+const chatStore = useChatStore()
 const activeTab = ref('chat')
 
 const tabs = [
@@ -22,8 +24,17 @@ const tabs = [
   { id: 'docs',    label: '文档' },
 ]
 
-onMounted(() => {
-  boardStore.fetchAll()
+onMounted(async () => {
+  await boardStore.fetchAll()
+  // 同步 agents 到 ChatStore
+  chatStore.initSessions(boardStore.agents)
+})
+
+// 当 agents 列表更新时，同步到 ChatStore
+watch(() => boardStore.agents, (newAgents) => {
+  if (newAgents.length > 0) {
+    chatStore.initSessions(newAgents)
+  }
 })
 
 function onTaskUpdate(taskId, newStatus) {
@@ -103,8 +114,12 @@ function onNavigate(tab) {
           :agents="boardStore.agents"
           @update-task="onTaskUpdate"
           @create-task="onTaskCreate"
+          @start-job="onJobStart"
         />
-        <Chat v-if="activeTab === 'chat'" :agents="boardStore.agents" />
+        <Chat
+          v-if="activeTab === 'chat'"
+          :agents="boardStore.agents"
+        />
         <JobView
           v-if="activeTab === 'job'"
           :jobs="boardStore.jobs"

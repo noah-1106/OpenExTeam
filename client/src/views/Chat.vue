@@ -1,85 +1,31 @@
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick } from 'vue'
+import { useChatStore } from '../stores/chat'
 
 const props = defineProps({
   agents: { type: Array, required: true },
 })
 
-// 会话数据
-const sessions = ref([
-  {
-    id: 'p2p-pinpin',
-    type: 'p2p',
-    name: '品品',
-    avatarUrl: null, // TODO: 从 OpenClaw 底座获取
-    agentId: 'agent-1',
-    messages: [
-      { sender: 'user', text: '品品，帮我梳理 Phase 1 验收标准', time: '18:00' },
-      { sender: 'agent', text: 'Phase 1 验收标准：\n1.能添加 OpenClaw 配对\n2.能测试连接\n3.左侧显示 Agent 列表\n4.能创建任务卡片\n5.能拖拽切换状态\n6.能下发任务\n7.Agent 状态实时\n8.能单聊', time: '18:01' },
-    ],
-  },
-  {
-    id: 'p2p-kaikai',
-    type: 'p2p',
-    name: '开开',
-    avatarUrl: null,
-    agentId: 'agent-2',
-    messages: [
-      { sender: 'user', text: '开开，查下 health 接口返回', time: '18:30' },
-      { sender: 'agent', text: 'health 返回：\n{ok: true, ts: ..., channels: {...}}\n主要是 ok 字段。', time: '18:31' },
-    ],
-  },
-  {
-    id: 'p2p-qianqian',
-    type: 'p2p',
-    name: '前前',
-    avatarUrl: null,
-    agentId: 'agent-3',
-    messages: [
-      { sender: 'user', text: '前端项目初始化好了吗？', time: '18:20' },
-      { sender: 'agent', text: '初始化完成！Vue3+Vite+TailwindCSS 已就绪。', time: '18:21' },
-    ],
-  },
-  {
-    id: 'group-dev',
-    type: 'group',
-    name: '开发群',
-    avatarUrl: null,
-    agentIds: ['agent-1', 'agent-2', 'agent-3'],
-    messages: [
-      { sender: '品品', agentId: 'agent-1', text: '今天推进 OpenExTeam：\n前前 Vue3 前端\n开开 Adapter\n我 PRD + 进度', time: '09:00' },
-      { sender: '开开', agentId: 'agent-2', text: '收到，我研究 WebSocket RPC', time: '09:05' },
-      { sender: '前前', agentId: 'agent-3', text: '好，我去搭架子', time: '09:06' },
-    ],
-  },
-])
-
-const activeSessionId = ref('p2p-kaikai')
-const inputText = ref('')
+const chatStore = useChatStore()
 const typing = ref(false)
+const inputText = ref('')
 const chatContainer = ref(null)
 
-const activeSession = computed(() => {
-  return sessions.value.find(s => s.id === activeSessionId.value) || sessions.value[0]
-})
+// 直接引用 store 中的状态（模板中使用 chatStore.xxx）
+const activeSession = computed(() => chatStore.activeSession())
 
 function selectSession(id) {
-  activeSessionId.value = id
+  chatStore.selectSession(id)
   scrollToBottom()
 }
 
-// 根据消息获取头像信息
 function getMsgAvatarInfo(msg) {
-  if (msg.sender === 'user') {
-    return { avatarUrl: null, isUser: true }
-  }
-  // 群聊消息：按 agentId 查找对应 Agent 的头像
-  if (activeSession.value.type === 'group' && msg.agentId) {
+  if (msg.sender === 'user') return { avatarUrl: null, isUser: true }
+  if (activeSession.value?.type === 'group' && msg.agentId) {
     const agent = props.agents.find(a => a.id === msg.agentId)
     return { avatarUrl: agent?.avatarUrl || null, isUser: false }
   }
-  // 私聊：用会话自身的头像
-  return { avatarUrl: activeSession.value.avatarUrl || null, isUser: false }
+  return { avatarUrl: activeSession.value?.avatarUrl || null, isUser: false }
 }
 
 function handleKeydown(e) {
@@ -89,31 +35,17 @@ function handleKeydown(e) {
   }
 }
 
-function sendMessage() {
+async function sendMessage() {
   const text = inputText.value.trim()
   if (!text) return
-  const sess = activeSession.value
-  sess.messages.push({
-    sender: 'user',
-    text,
-    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-  })
   inputText.value = ''
-  scrollToBottom()
-
-  // 模拟 Agent 回复
   typing.value = true
-  setTimeout(() => {
+  try {
+    await chatStore.sendMessage(text)
+  } finally {
     typing.value = false
-    const replies = ['收到，让我处理一下。', '好的，这个我来搞。', '明白了，马上开始。']
-    sess.messages.push({
-      sender: sess.name,
-      agentId: sess.agentId || null,
-      text: replies[Math.floor(Math.random() * replies.length)],
-      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-    })
-    scrollToBottom()
-  }, 1500)
+  }
+  scrollToBottom()
 }
 
 function scrollToBottom() {
@@ -125,13 +57,12 @@ function scrollToBottom() {
 }
 
 function getLastMessage(sess) {
-  if (sess.messages.length === 0) return ''
-  const last = sess.messages[sess.messages.length - 1]
-  return last.text
+  if (!sess.messages.length) return ''
+  return sess.messages[sess.messages.length - 1].text
 }
 
 function getLastTime(sess) {
-  if (sess.messages.length === 0) return ''
+  if (!sess.messages.length) return ''
   return sess.messages[sess.messages.length - 1].time
 }
 
@@ -153,12 +84,12 @@ function getStatusColor(agent) {
         <div class="px-3 mb-1">
           <div class="text-xs font-semibold text-muted uppercase tracking-wide px-2 py-1">单聊</div>
           <div
-            v-for="sess in sessions.filter(s => s.type === 'p2p')"
+            v-for="sess in chatStore.sessions.filter(s => s.type === 'p2p')"
             :key="sess.id"
             @click="selectSession(sess.id)"
             :class="[
               'flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer transition-colors mb-0.5',
-              activeSessionId === sess.id ? 'bg-accent-dim' : 'hover:bg-surface-raised'
+              chatStore.chatStore.activeSessionId === sess.id ? 'bg-accent-dim' : 'hover:bg-surface-raised'
             ]"
           >
             <div class="relative flex-shrink-0">
@@ -175,7 +106,7 @@ function getStatusColor(agent) {
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
-                <span :class="['text-sm font-medium', activeSessionId === sess.id ? 'text-accent' : 'text-primary']">
+                <span :class="['text-sm font-medium', chatStore.chatStore.activeSessionId === sess.id ? 'text-accent' : 'text-primary']">
                   {{ sess.name }}
                 </span>
                 <span class="text-xs text-muted flex-shrink-0">{{ getLastTime(sess) }}</span>
@@ -188,12 +119,12 @@ function getStatusColor(agent) {
         <div class="px-3">
           <div class="text-xs font-semibold text-muted uppercase tracking-wide px-2 py-1">群聊</div>
           <div
-            v-for="sess in sessions.filter(s => s.type === 'group')"
+            v-for="sess in chatStore.sessions.filter(s => s.type === 'group')"
             :key="sess.id"
             @click="selectSession(sess.id)"
             :class="[
               'flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer transition-colors mb-0.5',
-              activeSessionId === sess.id ? 'bg-accent-dim' : 'hover:bg-surface-raised'
+              chatStore.chatStore.activeSessionId === sess.id ? 'bg-accent-dim' : 'hover:bg-surface-raised'
             ]"
           >
             <div class="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center text-base flex-shrink-0">
@@ -202,7 +133,7 @@ function getStatusColor(agent) {
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
-                <span :class="['text-sm font-medium', activeSessionId === sess.id ? 'text-accent' : 'text-primary']">
+                <span :class="['text-sm font-medium', chatStore.chatStore.activeSessionId === sess.id ? 'text-accent' : 'text-primary']">
                   {{ sess.name }}
                 </span>
                 <span class="text-xs text-muted flex-shrink-0">{{ getLastTime(sess) }}</span>

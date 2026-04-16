@@ -137,6 +137,11 @@ async function initAdapters() {
 
 app.get('/api/config', (_, res) => res.json(loadConfig()));
 
+app.get('/api/config/adapters', (_, res) => {
+  const cfg = loadConfig();
+  res.json({ adapters: cfg.adapters || [] });
+});
+
 app.post('/api/config/adapters', (req, res) => {
   const cfg = loadConfig();
   cfg.adapters = req.body.adapters || [];
