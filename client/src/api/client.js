@@ -49,8 +49,10 @@ const api = {
   // --- ExCards ---
   getExcards: () => request('GET', '/api/excards'),
   getExcard: (id) => request('GET', `/api/excards/${id}`),
+  getExcardMd: (id) => request('GET', `/api/excards/${id}/md`),
   createExcard: (data) => request('POST', '/api/excards', data),
   updateExcard: (id, data) => request('PUT', `/api/excards/${id}`, data),
+  updateExcardMd: (id, markdown) => request('PUT', `/api/excards/${id}/md`, { markdown }),
   deleteExcard: (id) => request('DELETE', `/api/excards/${id}`),
 
   // --- Messages ---

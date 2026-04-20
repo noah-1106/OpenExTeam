@@ -1,11 +1,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useExcardStore } from '../stores/excards'
+import ExcardMdEditor from '../components/ExcardMdEditor.vue'
 
 const store = useExcardStore()
 const showCreateModal = ref(false)
 const isEditing = ref(false)
 const editData = ref({})
+const useMdEditor = ref(false) // 是否使用 Markdown 编辑器
 
 onMounted(() => {
   store.fetchExcards()
@@ -133,14 +135,22 @@ async function createExcard() {
 function startEditExcard() {
   editData.value = JSON.parse(JSON.stringify(store.selectedExcard))
   isEditing.value = true
+  useMdEditor.value = false
 }
 
 async function saveEditExcard() {
-  await store.updateExcard(store.selectedExcard.id, editData.value)
+  if (useMdEditor.value) {
+    await store.updateExcardMd(store.selectedExcard.id, store.selectedExcardMd)
+  } else {
+    await store.updateExcard(store.selectedExcard.id, editData.value)
+  }
   isEditing.value = false
 }
 
-function cancelEditExcard() { isEditing.value = false }
+function cancelEditExcard() {
+  isEditing.value = false
+  useMdEditor.value = false
+}
 
 async function deleteExcard() {
   if (!confirm(`确定删除 ExCard「${store.selectedExcard.name}」？`)) return
@@ -248,30 +258,168 @@ function getStepColor(idx) {
       </div>
 
       <!-- 右侧：ExCard 详情 -->
-      <div v-if="store.selectedExcard" class="w-[420px] overflow-y-auto bg-surface rounded-xl border border-border-subtle p-5 flex-shrink-0">
+      <div v-if="store.selectedExcard" class="w-[420px] flex flex-col bg-surface rounded-xl border border-border-subtle flex-shrink-0 overflow-hidden">
         <!-- 操作按钮 -->
-        <div class="flex justify-end gap-2 mb-3">
-          <template v-if="isEditing">
-            <button @click="cancelEditExcard" class="px-3 py-1.5 text-xs text-secondary hover:text-primary">取消</button>
-            <button @click="saveEditExcard" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">保存</button>
-          </template>
-          <template v-else>
-            <button @click="startEditExcard" class="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-surface-raised text-secondary">编辑</button>
-            <button @click="deleteExcard" class="px-3 py-1.5 text-xs border border-red-200 text-red-500 rounded-lg hover:bg-red-50">删除</button>
-          </template>
-        </div>
-        <div class="mb-4">
-          <!-- 完整 ID -->
-          <div class="text-xs text-muted font-mono mb-1">{{ selectedExcard.id }}</div>
-          <h3 class="text-lg font-semibold text-primary">{{ selectedExcard.name }}</h3>
-          <!-- 创建者 -->
-          <div class="flex items-center gap-2 mt-2">
-            <div class="w-6 h-6 rounded-full bg-accent-dim flex items-center justify-center text-xs text-accent font-medium">
-              {{ selectedExcard.agentName[0] }}
-            </div>
-            <span class="text-sm text-secondary">创建者：{{ selectedExcard.agentName }}</span>
+        <div class="flex justify-between items-center p-4 border-b border-border-subtle">
+          <div class="flex items-center gap-2">
+            <template v-if="isEditing">
+              <button
+                @click="useMdEditor = false"
+                :class="[
+                  'px-2 py-1 text-xs rounded transition-all',
+                  !useMdEditor ? 'bg-accent text-white' : 'text-secondary hover:text-primary'
+                ]"
+              >
+                📝 表单
+              </button>
+              <button
+                @click="useMdEditor = true"
+                :class="[
+                  'px-2 py-1 text-xs rounded transition-all',
+                  useMdEditor ? 'bg-accent text-white' : 'text-secondary hover:text-primary'
+                ]"
+              >
+                📄 Markdown
+              </button>
+            </template>
           </div>
-          <p class="text-sm text-secondary mt-2">{{ selectedExcard.description }}</p>
+          <div class="flex items-center gap-2">
+            <template v-if="isEditing">
+              <button @click="cancelEditExcard" class="px-3 py-1.5 text-xs text-secondary hover:text-primary">取消</button>
+              <button @click="saveEditExcard" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">保存</button>
+            </template>
+            <template v-else>
+              <button @click="startEditExcard" class="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-surface-raised text-secondary">编辑</button>
+              <button @click="deleteExcard" class="px-3 py-1.5 text-xs border border-red-200 text-red-500 rounded-lg hover:bg-red-50">删除</button>
+            </template>
+          </div>
+        </div>
+
+        <!-- 编辑模式：Markdown 编辑器 -->
+        <div v-if="isEditing && useMdEditor" class="flex-1 p-4 overflow-hidden">
+          <ExcardMdEditor v-model="store.selectedExcardMd" :readonly="false" />
+        </div>
+
+        <!-- 编辑模式：表单编辑器 -->
+        <template v-else-if="isEditing && !useMdEditor">
+          <div class="flex-1 overflow-y-auto p-4">
+            <div class="text-xs text-muted font-mono mb-1">{{ selectedExcard.id }}</div>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-xs font-medium text-primary mb-1">名称</label>
+                <input v-model="editData.name" type="text" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-primary mb-1">描述</label>
+                <textarea v-model="editData.description" rows="2" class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-primary mb-1">分类</label>
+                <select v-model="editData.category" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface">
+                  <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 查看模式：详情展示 -->
+        <template v-else>
+          <div class="flex-1 overflow-y-auto p-4">
+            <div class="mb-4">
+              <!-- 完整 ID -->
+              <div class="text-xs text-muted font-mono mb-1">{{ selectedExcard.id }}</div>
+              <h3 class="text-lg font-semibold text-primary">{{ selectedExcard.name }}</h3>
+              <!-- 创建者 -->
+              <div class="flex items-center gap-2 mt-2">
+                <div class="w-6 h-6 rounded-full bg-accent-dim flex items-center justify-center text-xs text-accent font-medium">
+                  {{ selectedExcard.agentName[0] }}
+                </div>
+                <span class="text-sm text-secondary">创建者：{{ selectedExcard.agentName }}</span>
+              </div>
+              <p class="text-sm text-secondary mt-2">{{ selectedExcard.description }}</p>
+            </div>
+
+        <!-- 资源依赖 -->
+        <div class="mb-5">
+          <h4 class="text-sm font-semibold text-primary mb-2 flex items-center gap-1">
+            <span>📦</span> 资源依赖
+          </h4>
+          <div class="space-y-1.5">
+            <div
+              v-for="(res, idx) in selectedExcard.resources"
+              :key="idx"
+              class="flex items-start gap-2 text-xs p-2 bg-surface-raised rounded-lg"
+            >
+              <span class="text-base flex-shrink-0">{{ getResourceIcon(res.type) }}</span>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-primary">{{ res.name }}</div>
+                <div class="text-muted truncate text-xs">{{ res.path }}</div>
+                <div class="text-muted text-xs">{{ res.purpose }}</div>
+              </div>
+              <span class="text-xs px-1.5 py-0.5 rounded bg-surface text-muted flex-shrink-0">{{ res.type }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 工作流 -->
+        <div class="mb-5">
+          <h4 class="text-sm font-semibold text-primary mb-2 flex items-center gap-1">
+            <span>🔁</span> 执行工作流
+          </h4>
+          <div class="relative">
+            <div class="absolute left-3.5 top-0 bottom-0 w-px bg-border-subtle" />
+            <div class="space-y-2">
+              <div
+                v-for="(step, idx) in selectedExcard.workflow"
+                :key="idx"
+                class="flex items-start gap-3 relative"
+              >
+                <div
+                  :class="['w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 z-10', getStepColor(idx)]"
+                >
+                  {{ step.step }}
+                </div>
+                <div class="flex-1 pt-0.5">
+                  <div class="text-sm font-medium text-primary">{{ step.name }}</div>
+                  <div class="text-xs text-muted mt-0.5">{{ step.desc }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 执行约定 -->
+        <div class="mb-5">
+          <h4 class="text-sm font-semibold text-primary mb-2 flex items-center gap-1">
+            <span>📋</span> 执行约定
+          </h4>
+          <div class="space-y-2">
+            <div class="text-xs">
+              <div class="text-muted mb-1">输入约定</div>
+              <div class="text-primary bg-surface-raised p-2 rounded-lg text-xs">{{ selectedExcard.conventions.input || '—' }}</div>
+            </div>
+            <div class="text-xs">
+              <div class="text-muted mb-1">输出约定</div>
+              <div class="text-primary bg-surface-raised p-2 rounded-lg text-xs">{{ selectedExcard.conventions.output || '—' }}</div>
+            </div>
+            <div v-if="selectedExcard.conventions.errors.length" class="text-xs">
+              <div class="text-muted mb-1">错误处理</div>
+              <div class="space-y-1">
+                <div
+                  v-for="(err, idx) in selectedExcard.conventions.errors"
+                  :key="idx"
+                  class="flex gap-2 bg-surface-raised p-2 rounded-lg"
+                >
+                  <span class="text-red-400 flex-shrink-0">✗</span>
+                  <div>
+                    <div class="text-primary font-medium">{{ err.scenario }}</div>
+                    <div class="text-muted">{{ err.handling }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 资源依赖 -->
@@ -378,6 +526,7 @@ function getStepColor(idx) {
           <span>{{ selectedExcard.version }}</span>
           <span>更新于 {{ selectedExcard.updatedAt }}</span>
         </div>
+        </template>
       </div>
 
       <!-- 空状态 -->

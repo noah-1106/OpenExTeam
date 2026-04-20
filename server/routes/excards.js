@@ -2,7 +2,7 @@
  * ExCards API Routes - ExCard API 路由
  */
 
-const { listExcards, getExcard, createExcard, updateExcard, deleteExcard } = require('../storage/excards');
+const { listExcards, getExcard, createExcard, updateExcard, deleteExcard, getExcardMd, updateExcardMd } = require('../storage/excards');
 const { broadcast } = require('../events/sse');
 
 function setupExcardsRoutes(app) {
@@ -21,6 +21,29 @@ function setupExcardsRoutes(app) {
       res.json(ec);
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/excards/:id/md', (req, res) => {
+    try {
+      const md = getExcardMd(req.params.id);
+      if (!md) return res.status(404).json({ error: 'ExCard not found' });
+      res.json({ id: req.params.id, markdown: md });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put('/api/excards/:id/md', (req, res) => {
+    try {
+      if (!req.body.markdown) {
+        return res.status(400).json({ error: 'markdown field required' });
+      }
+      const ec = updateExcardMd(req.params.id, req.body.markdown);
+      broadcast('excard_updated', { id: ec.id, name: ec.name });
+      res.json({ success: true, excard: ec });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
     }
   });
 

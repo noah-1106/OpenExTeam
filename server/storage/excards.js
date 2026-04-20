@@ -1,11 +1,13 @@
 /**
  * ExCard 存储层
- * 将 ExCard 存为 JSON 文件，支持 CRUD 操作
- * 路径: ~/.openexteam/excards/{id}.json
+ * 将 ExCard 存为 JSON 文件 + Markdown 文件，支持 CRUD 操作
+ * 路径: ~/.openexteam/excards/{id}.json (JSON)
+ * 路径: ~/.openexteam/excards-md/{id}.md (Markdown)
  */
 
 const path = require('path');
 const fs = require('fs');
+const { parseExcardMd, toExcardMd } = require('../services/excard-parser');
 
 const EXCARDS_DIR = path.join(process.env.HOME || '/root', '.openexteam', 'excards');
 const EXCARDS_MD_DIR = path.join(process.env.HOME || '/root', '.openexteam', 'excards-md');
@@ -15,6 +17,32 @@ if (!fs.existsSync(EXCARDS_DIR)) {
 }
 if (!fs.existsSync(EXCARDS_MD_DIR)) {
   fs.mkdirSync(EXCARDS_MD_DIR, { recursive: true });
+}
+
+/**
+ * 从 MD 文件同步到 JSON
+ */
+function syncFromMd(id) {
+  const mdFile = path.join(EXCARDS_MD_DIR, `${id}.md`);
+  const jsonFile = path.join(EXCARDS_DIR, `${id}.json`);
+
+  if (fs.existsSync(mdFile) && !fs.existsSync(jsonFile)) {
+    const mdContent = fs.readFileSync(mdFile, 'utf8');
+    const parsed = parseExcardMd(mdContent);
+    fs.writeFileSync(jsonFile, JSON.stringify(parsed, null, 2));
+    return parsed;
+  }
+  return null;
+}
+
+/**
+ * 从 JSON 同步到 MD 文件
+ */
+function syncToMd(excard) {
+  const mdFile = path.join(EXCARDS_MD_DIR, `${excard.id}.md`);
+  const mdContent = toExcardMd(excard);
+  fs.writeFileSync(mdFile, mdContent, 'utf8');
+  return mdFile;
 }
 
 /**
@@ -78,6 +106,7 @@ function createExcard(data) {
   };
 
   fs.writeFileSync(file, JSON.stringify(excard, null, 2));
+  syncToMd(excard); // 同步创建 MD 文件
   return excard;
 }
 
@@ -97,6 +126,50 @@ function updateExcard(id, updates) {
   };
 
   fs.writeFileSync(file, JSON.stringify(updated, null, 2));
+  syncToMd(updated); // 同步更新 MD 文件
+  return updated;
+}
+
+/**
+ * 获取 ExCard Markdown 内容
+ */
+function getExcardMd(id) {
+  const mdFile = path.join(EXCARDS_MD_DIR, `${id}.md`);
+  if (!fs.existsSync(mdFile)) {
+    const excard = getExcard(id);
+    if (excard) {
+      syncToMd(excard);
+      return fs.readFileSync(mdFile, 'utf8');
+    }
+    return null;
+  }
+  return fs.readFileSync(mdFile, 'utf8');
+}
+
+/**
+ * 更新 ExCard Markdown 内容（解析并同步到 JSON）
+ */
+function updateExcardMd(id, mdContent) {
+  const mdFile = path.join(EXCARDS_MD_DIR, `${id}.md`);
+  const jsonFile = path.join(EXCARDS_DIR, `${id}.json`);
+
+  if (!fs.existsSync(jsonFile)) throw new Error(`ExCard ${id} not found`);
+
+  // 解析 MD 并合并到现有数据
+  const existing = JSON.parse(fs.readFileSync(jsonFile, 'utf8'));
+  const parsed = parseExcardMd(mdContent);
+
+  const updated = {
+    ...existing,
+    ...parsed,
+    id, // 保持原 ID
+    updatedAt: new Date().toISOString().split('T')[0],
+  };
+
+  // 保存两个文件
+  fs.writeFileSync(mdFile, mdContent, 'utf8');
+  fs.writeFileSync(jsonFile, JSON.stringify(updated, null, 2));
+
   return updated;
 }
 
@@ -121,4 +194,7 @@ function updateTaskCount(id, count) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-module.exports = { listExcards, getExcard, createExcard, updateExcard, deleteExcard, updateTaskCount, EXCARDS_DIR };
+module.exports = {
+  listExcards, getExcard, createExcard, updateExcard, deleteExcard, updateTaskCount,
+  getExcardMd, updateExcardMd, EXCARDS_DIR, EXCARDS_MD_DIR
+};

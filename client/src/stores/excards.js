@@ -10,6 +10,7 @@ import api from '../api/client';
 export const useExcardStore = defineStore('excards', () => {
   const excards = ref([]);          // 列表（摘要）
   const selectedExcard = ref(null); // 当前选中完整对象
+  const selectedExcardMd = ref(''); // 当前选中的 Markdown 内容
   const loading = ref(false);
   const error = ref(null);
 
@@ -40,11 +41,27 @@ export const useExcardStore = defineStore('excards', () => {
     }
   }
 
+  /** 加载单个 ExCard 的 Markdown 内容 */
+  async function fetchExcardMd(id) {
+    try {
+      const data = await api.getExcardMd(id);
+      selectedExcardMd.value = data.markdown || '';
+      return selectedExcardMd.value;
+    } catch (err) {
+      console.error('[ExcardStore] fetchExcardMd:', err);
+      return '';
+    }
+  }
+
   /** 选中并加载完整内容 */
   async function selectExcard(ec) {
-    if (!ec) { selectedExcard.value = null; return; }
-    // 列表已有摘要，直接加载完整版
+    if (!ec) {
+      selectedExcard.value = null;
+      selectedExcardMd.value = '';
+      return;
+    }
     selectedExcard.value = await fetchExcard(ec.id);
+    await fetchExcardMd(ec.id);
   }
 
   /** 创建 ExCard */
@@ -57,7 +74,17 @@ export const useExcardStore = defineStore('excards', () => {
   /** 更新 ExCard */
   async function updateExcard(id, data) {
     const result = await api.updateExcard(id, data);
-    // 刷新列表和详情
+    await fetchExcards();
+    if (selectedExcard.value?.id === id) {
+      await fetchExcard(id);
+    }
+    return result;
+  }
+
+  /** 更新 ExCard Markdown */
+  async function updateExcardMd(id, markdown) {
+    const result = await api.updateExcardMd(id, markdown);
+    selectedExcardMd.value = markdown;
     await fetchExcards();
     if (selectedExcard.value?.id === id) {
       await fetchExcard(id);
@@ -70,13 +97,14 @@ export const useExcardStore = defineStore('excards', () => {
     await api.deleteExcard(id);
     if (selectedExcard.value?.id === id) {
       selectedExcard.value = null;
+      selectedExcardMd.value = '';
     }
     await fetchExcards();
   }
 
   return {
-    excards, selectedExcard, loading, error,
-    fetchExcards, fetchExcard, selectExcard,
-    createExcard, updateExcard, deleteExcard,
+    excards, selectedExcard, selectedExcardMd, loading, error,
+    fetchExcards, fetchExcard, fetchExcardMd, selectExcard,
+    createExcard, updateExcard, updateExcardMd, deleteExcard,
   };
 });
