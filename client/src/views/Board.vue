@@ -43,12 +43,6 @@ function createTask() {
   emit('create-task', { ...newTask.value, status: 'todo' })
   showCreateModal.value = false
 }
-function onDragStart(e, task) { e.dataTransfer.setData('taskId', task.id) }
-function onDrop(e, status) {
-  const tid = e.dataTransfer.getData('taskId')
-  if (tid) emit('update-task', tid, status)
-}
-function onDragOver(e) { e.preventDefault() }
 function openTaskDetail(task) { selectedTask.value = task; showDetail.value = true }
 function closeDetail() { showDetail.value = false; selectedTask.value = null }
 function changeStatus(status) {
@@ -143,7 +137,7 @@ const statusOptions = [
         <div class="grid grid-cols-3">
           <div v-for="(col, ci) in columns" :key="col.id"
             :class="ci < 2 ? 'border-r border-border-subtle' : ''"
-            class="p-3" @drop="onDrop($event, col.id)" @dragover="onDragOver">
+            class="p-3">
             <!-- Column Header -->
             <div class="flex items-center gap-2 mb-3">
               <span :class="['w-2 h-2 rounded-full flex-shrink-0', col.color]" />
@@ -152,8 +146,7 @@ const statusOptions = [
             </div>
             <!-- Tasks -->
             <div class="space-y-2">
-              <div v-for="task in tasksByStatus(job.id, col.id)" :key="task.id"
-                draggable="true" @dragstart="onDragStart($event, task)">
+              <div v-for="task in tasksByStatus(job.id, col.id)" :key="task.id">
                 <div @click="openTaskDetail(task)"
                   :class="[
                     'rounded-xl border p-3 cursor-pointer transition-all duration-150 hover:shadow-sm',

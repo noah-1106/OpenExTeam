@@ -9,6 +9,7 @@ import Chat from './views/Chat.vue'
 import ExcardView from './views/ExcardView.vue'
 import { useBoardStore } from './stores/board'
 import { useChatStore } from './stores/chat'
+import api from './api/client'
 
 const boardStore = useBoardStore()
 const chatStore = useChatStore()
@@ -125,6 +126,7 @@ function onNavigate(tab) {
           :jobs="boardStore.jobs"
           :tasks="boardStore.tasks"
           :agents="boardStore.agents"
+          :excards="boardStore.excards"
           @create-job="onJobCreate"
           @start-job="onJobStart"
           @delete-job="onJobDelete"

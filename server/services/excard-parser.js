@@ -74,19 +74,24 @@ function parseExcardMd(mdContent) {
           currentStep = {
             index: parseInt(stepMatch[1]),
             name: stepMatch[2].trim(),
-            description: stepMatch[3].trim()
+            description: stepMatch[3].trim(),
+            agent: null // 可以在步骤中指定 agent
           };
         } else {
           const simpleMatch = line.match(/^(\d+)\.\s(.*)$/);
           currentStep = {
             index: parseInt(simpleMatch[1]),
             name: simpleMatch[2].trim(),
-            description: ''
+            description: '',
+            agent: null // 可以在步骤中指定 agent
           };
         }
       } else if (currentStep && line.startsWith('- ')) {
         if (!currentStep.actions) currentStep.actions = [];
         currentStep.actions.push(line.slice(2).trim());
+      } else if (currentStep && line.toLowerCase().startsWith('agent:')) {
+        // 支持在步骤中指定 agent: Agent名称
+        currentStep.agent = line.slice(6).trim();
       }
     }
 
@@ -130,16 +135,20 @@ ${(excard.resources || []).map(r => `- ${r}`).join('\n')}
 
 ## Execution Workflow
 
-${(excard.workflow || []).map(step => {
-  let stepMd = `${step.index}. **${step.name}**`;
-  if (step.description) stepMd += ` ${step.description}`;
-  if (step.actions && step.actions.length) {
-    stepMd += '\n' + step.actions.map(a => `  - ${a}`).join('\n');
-  }
-  return stepMd;
-}).join('\n\n')}
+`;
 
-## Execution Conventions
+  for (const step of (excard.workflow || [])) {
+    let stepMd = `${step.index}. **${step.name}**`;
+    if (step.description) stepMd += ` ${step.description}`;
+    md += stepMd;
+    if (step.agent) md += `\n  Agent: ${step.agent}`;
+    if (step.actions && step.actions.length) {
+      md += '\n' + step.actions.map(a => `  - ${a}`).join('\n');
+    }
+    md += '\n\n';
+  }
+
+  md += `## Execution Conventions
 
 ### Input
 ${excard.conventions?.input || ''}
@@ -162,7 +171,7 @@ function generateTasksFromExcard(excard, jobId, agentId) {
     jobId,
     title: step.name,
     description: step.description + (step.actions ? '\n\n' + step.actions.map(a => `- ${a}`).join('\n') : ''),
-    agent: agentId,
+    agent: step.agent || agentId, // 优先使用步骤中指定的 agent
     status: 'todo',
     stepIndex: step.index,
     excardStep: step.index

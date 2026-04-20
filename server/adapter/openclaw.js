@@ -329,7 +329,6 @@ class OpenClawAdapter extends EventEmitter {
       this.ws.on('close', () => {
         this.connected = false;
         this.ready = false;
-        this._stopHeartbeat();
         console.log('[OpenClawAdapter] Disconnected');
         this.emit('disconnected');
         if (this.isPaired && this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -505,16 +504,31 @@ class OpenClawAdapter extends EventEmitter {
     // 检查是否是 device identity mismatch（未配对）
     const msgLower = errorMessage.toLowerCase();
     const codeUpper = (errorCode || '').toUpperCase();
-    const isPairingError = 
+    const isPairingError =
       codeUpper.includes('NOT_PAIRED') ||
       codeUpper.includes('DEVICE_ID_MISMATCH') ||
       codeUpper.includes('DEVICE_NOT_PAIRED') ||
       codeUpper.includes('PAIRING_REQUIRED') ||
+      codeUpper.includes('INVALID_REQUEST') ||
       msgLower.includes('device identity mismatch') ||
       msgLower.includes('not paired') ||
-      msgLower.includes('pairing required');
+      msgLower.includes('pairing required') ||
+      msgLower.includes('unknown requestid');
 
     if (isPairingError) {
+      // 如果有旧的 device token 但配对失败，可能是 token 失效了
+      // 尝试清除旧凭证后重试一次
+      if (this.deviceToken && !this._credentialResetAttempted) {
+        console.log('[OpenClawAdapter] Old token seems invalid, clearing credentials and retrying...');
+        this._credentialResetAttempted = true;
+        this._clearCredentialsAndRegenerate();
+        // 重新调用 connect（通过 reject 让上层处理）
+        if (reject) {
+          reject(new Error('CREDENTIAL_RESET_REQUIRED'));
+        }
+        return;
+      }
+
       this._handlePairingRequired(resolve, reject);
       return;
     }
@@ -1033,8 +1047,10 @@ class OpenClawAdapter extends EventEmitter {
       // Gateway 推送事件
       if (msg.type === 'event') {
         this.emit('gateway_event', msg);
-        if (msg.event === 'agent.message') {
-          const parsed = this.parse(msg.payload);
+
+        // 处理 chat 事件（完整消息）
+        if (msg.event === 'chat' && msg.payload?.message) {
+          const parsed = this.parseChatEvent(msg.payload);
           if (parsed) this.emit('message', parsed);
         }
 
@@ -1057,6 +1073,28 @@ class OpenClawAdapter extends EventEmitter {
       case 'chat': return { ...base, content: message.content, chatId: message.chatId };
       default: return { ...base, ...message };
     }
+  }
+
+  parseChatEvent(payload) {
+    if (!payload?.message) return null;
+    const msg = payload.message;
+    const content = msg.content?.[0]?.text || '';
+
+    return {
+      messageId: payload.runId || payload.seq,
+      type: 'chat',
+      agent: this.extractAgentId(payload.sessionKey),
+      content: content,
+      timestamp: msg.timestamp || new Date().toISOString(),
+      sessionKey: payload.sessionKey,
+      state: payload.state
+    };
+  }
+
+  extractAgentId(sessionKey) {
+    if (!sessionKey) return 'unknown';
+    const match = sessionKey.match(/^agent:([^:]+):/);
+    return match ? match[1] : 'unknown';
   }
 
   parse(raw) {
@@ -1113,6 +1151,7 @@ class OpenClawAdapter extends EventEmitter {
     this.isPaired = false;
     this.pairingRequested = false;
     this.deviceToken = null;
+    this._credentialResetAttempted = false;
 
     // 删除存储的 token
     const tokenPath = path.join(IDENTITY_DIR, 'device-auth.json');
@@ -1122,6 +1161,33 @@ class OpenClawAdapter extends EventEmitter {
 
     await this.disconnect();
     console.log('[OpenClawAdapter] Pairing state reset');
+  }
+
+  /**
+   * 清除所有凭证并重新生成（用于解决旧凭证无效的问题）
+   */
+  _clearCredentialsAndRegenerate() {
+    console.log('[OpenClawAdapter] Clearing all device credentials and regenerating...');
+
+    // 删除所有凭证文件
+    const deviceJsonPath = path.join(IDENTITY_DIR, 'device.json');
+    const privateKeyPath = path.join(IDENTITY_DIR, 'device-private.pem');
+    const deviceAuthPath = path.join(IDENTITY_DIR, 'device-auth.json');
+
+    [deviceJsonPath, privateKeyPath, deviceAuthPath].forEach(file => {
+      if (fs.existsSync(file)) {
+        fs.unlinkSync(file);
+        console.log(`[OpenClawAdapter] Deleted: ${file}`);
+      }
+    });
+
+    // 重置状态
+    this.device = null;
+    this.deviceToken = null;
+    this.isPaired = false;
+    this.pairingRequested = false;
+
+    console.log('[OpenClawAdapter] Credentials cleared, will generate new ones on next connect');
   }
 }
 

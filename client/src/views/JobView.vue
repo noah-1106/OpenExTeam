@@ -12,10 +12,10 @@ const emit = defineEmits(['create-job', 'start-job', 'delete-job', 'add-task', '
 
 // ==================== 新建工作弹窗 ====================
 const showCreateModal = ref(false)
-const newJob = ref({ title: '', description: '', agent: '', type: 'once', excard: '', scheduleTime: '09:00' })
+const newJob = ref({ title: '', description: '', agent: '', type: 'once', excardId: '', scheduleTime: '09:00' })
 
 function openCreateModal() {
-  newJob.value = { title: '', description: '', agent: '', type: 'once', excard: '' }
+  newJob.value = { title: '', description: '', agent: '', type: 'once', excardId: '', autoGenerateTasks: false }
   showCreateModal.value = true
 }
 
@@ -156,10 +156,10 @@ const agentAvatars = { '品品': '👩‍💼', '开开': '👨‍💻', '前前
           <!-- Job Header -->
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-center gap-3">
-              <span class="text-2xl">{{ agentAvatars[job.agent] || '👤' }}</span>
+              <span class="text-2xl">{{ job.agent ? (agentAvatars[job.agent] || '👤') : '📋' }}</span>
               <div>
                 <div class="font-semibold text-primary text-sm">{{ job.title }}</div>
-                <div class="text-xs text-muted">{{ job.agent }}</div>
+                <div class="text-xs text-muted">{{ job.agent || '多 Agent 协作' }}</div>
               </div>
             </div>
             <span :class="['text-xs px-2 py-0.5 rounded-md font-medium', job.type === 'recurring' ? 'bg-blue-50 text-blue-600' : 'bg-surface-raised text-secondary']">
@@ -230,9 +230,9 @@ const agentAvatars = { '品品': '👩‍💼', '开开': '👨‍💻', '前前
             <input v-model="newJob.title" type="text" placeholder="例如：每日站会摘要" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-primary mb-1.5">负责 Agent</label>
+            <label class="block text-sm font-medium text-primary mb-1.5">负责 Agent <span class="text-muted text-xs">(可选，可在 ExCard 或任务中指定)</span></label>
             <select v-model="newJob.agent" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface">
-              <option value="">选择 Agent...</option>
+              <option value="">不指定 (使用 ExCard 或任务中的 Agent)</option>
               <option v-for="agent in agents" :key="agent.id" :value="agent.name">{{ agent.name }}</option>
             </select>
           </div>
@@ -258,6 +258,14 @@ const agentAvatars = { '品品': '👩‍💼', '开开': '👨‍💻', '前前
               type="time"
               class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface"
             />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-primary mb-1.5">绑定 ExCard</label>
+            <select v-model="newJob.excardId" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface">
+              <option value="">不绑定</option>
+              <option v-for="ec in excards" :key="ec.id" :value="ec.id">{{ ec.name }}</option>
+            </select>
+            <p class="text-xs text-muted mt-1">ExCard 作为完整的执行模板，启动时会发送给 Agent</p>
           </div>
         </div>
         <div class="flex justify-end gap-2 px-5 py-4 border-t border-border-subtle">
@@ -303,10 +311,11 @@ const agentAvatars = { '品品': '👩‍💼', '开开': '👨‍💻', '前前
               <div class="text-muted text-xs mb-1">负责 Agent</div>
               <template v-if="isEditingJob">
                 <select v-model="editJobData.agent" class="w-full px-2 py-1.5 border border-border rounded text-sm outline-none focus:border-accent bg-surface">
+                  <option value="">不指定</option>
                   <option v-for="a in agents" :key="a.id" :value="a.name">{{ a.name }}</option>
                 </select>
               </template>
-              <div v-else class="text-primary font-medium">{{ selectedJob.agent }}</div>
+              <div v-else class="text-primary font-medium">{{ selectedJob.agent || '多 Agent 协作' }}</div>
             </div>
             <div>
               <div class="text-muted text-xs mb-1">类型</div>
@@ -326,7 +335,13 @@ const agentAvatars = { '品品': '👩‍💼', '开开': '👨‍💻', '前前
             </div>
             <div>
               <div class="text-muted text-xs mb-1">绑定 ExCard</div>
-              <div class="text-primary text-xs">{{ getJobExcardName(selectedJob.excard) }}</div>
+              <template v-if="isEditingJob">
+                <select v-model="editJobData.excard" class="w-full px-2 py-1.5 border border-border rounded text-sm outline-none focus:border-accent bg-surface">
+                  <option value="">不绑定</option>
+                  <option v-for="ec in excards" :key="ec.id" :value="ec.id">{{ ec.name }}</option>
+                </select>
+              </template>
+              <div v-else class="text-primary text-xs">{{ getJobExcardName(selectedJob.excard) }}</div>
             </div>
           </div>
 

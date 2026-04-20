@@ -16,6 +16,7 @@ const formData = ref({ name: '', url: '', token: '' })
 const testResult = ref(null)
 const testing = ref(false)
 const saving = ref(false)
+const resetting = ref(false)
 
 onMounted(() => {
   settingsStore.fetchAdapters()
@@ -39,7 +40,7 @@ async function testConnection() {
       url: formData.value.url,
       token: formData.value.token,
     })
-    
+
     // 处理配对提示
     if (result.pairing_required) {
       testResult.value = 'pairing_required'
@@ -60,6 +61,7 @@ async function saveConnection() {
   try {
     await settingsStore.saveAdapter({
       id: selectedFramework.value,
+      type: selectedFramework.value,
       name: formData.value.name,
       url: formData.value.url,
       token: formData.value.token,
@@ -68,6 +70,7 @@ async function saveConnection() {
     formData.value = { name: '', url: '', token: '' }
     testResult.value = null
     selectedFramework.value = ''
+    alert('保存成功！后端会自动尝试连接。如果需要配对，请查看后端日志。')
   } catch (err) {
     alert('保存失败：' + err.message)
   } finally {
@@ -81,6 +84,19 @@ async function deleteConnection(conn) {
     await settingsStore.deleteAdapter(conn)
   } catch (err) {
     alert('删除失败：' + err.message)
+  }
+}
+
+async function resetCredentials(type) {
+  if (!confirm('确定重置设备凭证？这将清除当前的配对信息，需要重新配对。')) return
+  resetting.value = true
+  try {
+    const result = await settingsStore.resetCredentials(type)
+    alert(result.message || '凭证重置成功！')
+  } catch (err) {
+    alert('重置失败：' + err.message)
+  } finally {
+    resetting.value = false
   }
 }
 </script>
@@ -127,12 +143,22 @@ async function deleteConnection(conn) {
                 上次心跳: {{ conn.lastHeartbeat || '刚刚' }}
               </p>
             </div>
-            <button 
-              @click="deleteConnection(conn)"
-              class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              删除
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                v-if="conn.type === 'openclaw' || conn.id === 'openclaw'"
+                @click="resetCredentials('openclaw')"
+                :disabled="resetting"
+                class="px-3 py-1.5 text-sm text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors disabled:opacity-50"
+              >
+                重置凭证
+              </button>
+              <button
+                @click="deleteConnection(conn)"
+                class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                删除
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -215,22 +241,28 @@ async function deleteConnection(conn) {
             <!-- Test Result -->
             <div v-if="testResult" :class="[
               'p-3 rounded-lg text-sm',
-              testResult === 'success' ? 'bg-green-50 text-green-700' : 
-              testResult === 'pairing_required' ? 'bg-yellow-50 text-yellow-700' : 
+              testResult === 'success' ? 'bg-green-50 text-green-700' :
+              testResult === 'pairing_required' ? 'bg-yellow-50 text-yellow-700' :
               'bg-red-50 text-red-700'
             ]">
               <span v-if="testResult === 'success'">✅ 连接成功！Gateway 协议握手完成</span>
               <span v-else-if="testResult === 'pairing_required'">
-                ⏳ 等待设备配对批准
+                ⏳ 需要设备配对
                 <br/>
                 <strong>Device ID:</strong> <code class="bg-yellow-100 px-1 rounded">{{ formData.pairingDeviceId }}</code>
                 <br/>
-                <strong>操作:</strong> {{ formData.pairingMessage }}
+                <span class="text-xs">你可以直接保存配置，后端会持续尝试连接</span>
               </span>
-              <span v-else>❌ 连接失败，请检查 URL 和 Token 是否正确</span>
+              <span v-else>
+                ❌ 连接失败，请检查 URL 和 Token 是否正确
+                <br v-if="selectedFramework === 'openclaw'" />
+                <span v-if="selectedFramework === 'openclaw'" class="text-xs">
+                  如果之前配对过，可能需要重置凭证后重试
+                </span>
+              </span>
             </div>
 
-            <div class="flex gap-3 pt-2">
+            <div class="flex flex-wrap gap-3 pt-2">
               <button
                 @click="testConnection"
                 :disabled="testing || !formData.url"
@@ -244,6 +276,14 @@ async function deleteConnection(conn) {
                 class="px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 保存
+              </button>
+              <button
+                v-if="selectedFramework === 'openclaw'"
+                @click="resetCredentials('openclaw')"
+                :disabled="resetting"
+                class="px-4 py-2 text-sm font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {{ resetting ? '重置中...' : '重置凭证' }}
               </button>
             </div>
           </div>

@@ -4,6 +4,8 @@
 
 const { loadConfig, saveConfig } = require('../config');
 const { createAdapter } = require('../adapter');
+const fs = require('fs');
+const path = require('path');
 
 function setupConfigRoutes(app, activeAdapters) {
   app.get('/api/config', (_, res) => res.json(loadConfig()));
@@ -21,66 +23,131 @@ function setupConfigRoutes(app, activeAdapters) {
   });
 
   app.post('/api/adapter/test', async (req, res) => {
-    const { type, url, token } = req.body;
+    let { type, url, token } = req.body;
     try {
+      // 自动修复 URL 格式
+      if (url && url.startsWith('http://')) {
+        url = url.replace('http://', 'ws://');
+        console.log(`[Adapter Test] Auto-converted URL to: ${url}`);
+      }
+      if (url && url.startsWith('https://')) {
+        url = url.replace('https://', 'wss://');
+        console.log(`[Adapter Test] Auto-converted URL to: ${url}`);
+      }
+
+      console.log(`[Adapter Test] Testing ${type} connection to ${url}`);
+
+      if (!url || !url.startsWith('ws://') && !url.startsWith('wss://')) {
+        return res.status(400).json({
+          success: false,
+          message: 'URL 格式不正确，需要以 ws:// 或 wss:// 开头'
+        });
+      }
+
       const a = createAdapter(type, { url, token });
 
       let pairingInfo = null;
-      let pairingComplete = false;
+      let testTimedOut = false;
+      let connectDone = false;
+
+      // 5秒超时
+      const timeout = setTimeout(() => {
+        if (!connectDone) {
+          testTimedOut = true;
+          console.log('[Adapter Test] Test timed out after 5 seconds');
+          a.disconnect().catch(() => {});
+          res.json({
+            success: false,
+            message: '连接超时，请检查 URL 是否正确，或直接保存配置让后台尝试连接'
+          });
+        }
+      }, 5000);
 
       a.on('pairing_required', (info) => {
         pairingInfo = info;
         console.log('[Adapter Test] Pairing required:', info);
       });
 
-      a.on('pairing_complete', (info) => {
-        pairingComplete = true;
-        console.log('[Adapter Test] Pairing complete:', info);
-      });
+      try {
+        await a.connect();
 
-      const result = await a.connect().catch(err => ({ connected: false, err }));
+        clearTimeout(timeout);
+        connectDone = true;
 
-      if (a.connected) {
-        const ok = await a.healthCheck();
-        await a.disconnect();
-        res.json({ success: ok, message: ok ? 'OK' : 'Health check failed' });
-        return;
+        if (a.connected) {
+          const ok = await a.healthCheck().catch(() => false);
+          await a.disconnect();
+          res.json({ success: ok, message: ok ? '连接成功！' : '连接但健康检查失败' });
+        } else if (pairingInfo) {
+          res.json({
+            success: false,
+            pairing_required: true,
+            device_id: pairingInfo.deviceId,
+            message: pairingInfo.message
+          });
+          await a.disconnect().catch(() => {});
+        } else {
+          await a.disconnect().catch(() => {});
+          res.status(400).json({ success: false, message: '连接失败' });
+        }
+      } catch (err) {
+        clearTimeout(timeout);
+        connectDone = true;
+        if (testTimedOut) return;
+
+        await a.disconnect().catch(() => {});
+        console.error('[Adapter Test] Connection error:', err.message);
+        res.status(400).json({
+          success: false,
+          message: `连接失败: ${err.message}`
+        });
+      }
+    } catch (err) {
+      console.error('[Adapter Test] Error:', err);
+      res.status(400).json({ success: false, message: err.message });
+    }
+  });
+
+  // 重置适配器凭证
+  app.post('/api/adapter/reset-credentials', async (req, res) => {
+    const { type } = req.body;
+    console.log(`[Config] Resetting credentials for adapter: ${type}`);
+
+    try {
+      // 断开并移除当前活动的适配器
+      for (const [name, adapter] of activeAdapters.entries()) {
+        if (adapter.name === type) {
+          try {
+            await adapter.disconnect().catch(() => {});
+          } catch (e) {
+            console.warn(`[Config] Error disconnecting adapter:`, e.message);
+          }
+          activeAdapters.delete(name);
+          console.log(`[Config] Removed active adapter: ${name}`);
+        }
       }
 
-      if (pairingInfo) {
-        console.log('[Adapter Test] Waiting for pairing to complete (max 30s)...');
+      // 对于 OpenClaw 适配器，删除凭证文件
+      if (type === 'openclaw') {
+        const homeDir = process.env.HOME || process.env.USERPROFILE;
+        const identityDir = path.join(homeDir, '.openclaw', 'identity');
 
-        for (let i = 0; i < 30; i++) {
-          await new Promise(r => setTimeout(r, 1000));
-          if (pairingComplete) {
-            console.log('[Adapter Test] Pairing completed!');
-            const retryResult = await a.connect().catch(err => ({ connected: false, err }));
-            if (retryResult.connected) {
-              const ok = await a.healthCheck();
-              await a.disconnect();
-              res.json({ success: ok, message: ok ? 'OK' : 'Health check failed' });
-            } else {
-              res.status(400).json({ success: false, message: '配对完成但连接失败' });
-              await a.disconnect().catch(() => {});
+        if (fs.existsSync(identityDir)) {
+          const files = fs.readdirSync(identityDir);
+          for (const file of files) {
+            if (file === 'device.json' || file === 'device-auth.json' || file === 'device-private.pem') {
+              const filePath = path.join(identityDir, file);
+              fs.unlinkSync(filePath);
+              console.log(`[Config] Deleted credential file: ${filePath}`);
             }
-            return;
           }
         }
-
-        res.json({
-          success: false,
-          pairing_required: true,
-          device_id: pairingInfo.deviceId,
-          message: pairingInfo.message
-        });
-        await a.disconnect().catch(() => {});
-        return;
       }
 
-      await a.disconnect().catch(() => {});
-      res.status(400).json({ success: false, message: result.err?.message || '连接失败' });
+      res.json({ success: true, message: '凭证已重置，可以重新连接' });
     } catch (err) {
-      res.status(400).json({ success: false, message: err.message });
+      console.error('[Config] Error resetting credentials:', err);
+      res.status(500).json({ success: false, message: `重置失败: ${err.message}` });
     }
   });
 }

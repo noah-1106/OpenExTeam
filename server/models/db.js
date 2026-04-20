@@ -23,8 +23,14 @@ async function initDb() {
   db.run(`CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT,
     type TEXT DEFAULT 'one-time', status TEXT DEFAULT 'idle',
-    excard_id TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    excard_id TEXT, agent TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  // 添加 agent 列（如果表已存在但没有该列）
+  try {
+    db.run('ALTER TABLE jobs ADD COLUMN agent TEXT');
+  } catch (e) {
+    // 列可能已存在，忽略错误
+  }
   db.run(`CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY, job_id TEXT NOT NULL, title TEXT NOT NULL,
     description TEXT, agent TEXT NOT NULL, status TEXT DEFAULT 'todo',

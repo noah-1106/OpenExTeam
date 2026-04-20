@@ -32,8 +32,7 @@ const api = {
   createJob: (data) => request('POST', '/api/jobs', data),
   updateJob: (id, data) => request('PATCH', `/api/jobs/${id}`, data),
   deleteJob: (id) => request('DELETE', `/api/jobs/${id}`),
-  generateTasksFromExcard: (jobId, agentId, excardId) =>
-    request('POST', `/api/jobs/${jobId}/generate-tasks`, { agentId, excardId }),
+  getJobExcard: (id) => request('GET', `/api/jobs/${id}/excard`),
 
   // --- Tasks ---
   getTasks: (jobId) => request('GET', `/api/tasks${jobId ? `?jobId=${jobId}` : ''}`),

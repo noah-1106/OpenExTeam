@@ -117,3 +117,119 @@ body {
 .tab:hover { color: #1C1917; background-color: rgba(0,0,0,0.04); }
 .tab-active { color: #1C1917; background-color: rgba(229,112,42,0.08); font-weight: 500; }
 .tab-active:hover { background-color: rgba(229,112,42,0.12); }
+
+/* Markdown Styles */
+.prose {
+  line-height: 1.6;
+}
+.prose p {
+  margin-bottom: 0.75em;
+}
+.prose p:last-child {
+  margin-bottom: 0;
+}
+.prose strong {
+  font-weight: 600;
+}
+.prose em {
+  font-style: italic;
+}
+.prose ul, .prose ol {
+  margin-left: 1.25em;
+  margin-bottom: 0.75em;
+}
+.prose li {
+  margin-bottom: 0.25em;
+}
+.prose code {
+  background-color: rgba(0,0,0,0.05);
+  padding: 0.125em 0.375em;
+  border-radius: 0.25em;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-size: 0.9em;
+}
+.prose pre {
+  background-color: #1C1917;
+  color: #F5F4F0;
+  padding: 0.75em 1em;
+  border-radius: 0.5em;
+  overflow-x: auto;
+  margin-bottom: 0.75em;
+}
+.prose pre code {
+  background-color: transparent;
+  padding: 0;
+  color: inherit;
+}
+.prose blockquote {
+  border-left: 3px solid #E5702A;
+  padding-left: 1em;
+  margin-left: 0;
+  margin-bottom: 0.75em;
+  color: #78716C;
+}
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  font-weight: 600;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+.prose h1:first-child, .prose h2:first-child, .prose h3:first-child, .prose h4:first-child {
+  margin-top: 0;
+}
+.prose h1 { font-size: 1.5em; }
+.prose h2 { font-size: 1.25em; }
+.prose h3 { font-size: 1.125em; }
+.prose h4 { font-size: 1em; }
+.prose a {
+  color: #E5702A;
+  text-decoration: underline;
+}
+.prose a:hover {
+  color: #C85A1E;
+}
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.75em;
+}
+.prose th, .prose td {
+  border: 1px solid #E8E6E1;
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+.prose th {
+  background-color: #F5F4F0;
+  font-weight: 600;
+}
+.prose hr {
+  border: none;
+  border-top: 1px solid #E8E6E1;
+  margin: 1.5em 0;
+}
+
+/* User message markdown (inverted colors) */
+.prose-invert {
+  color: white;
+}
+.prose-invert code {
+  background-color: rgba(255,255,255,0.2);
+}
+.prose-invert pre {
+  background-color: rgba(0,0,0,0.3);
+}
+.prose-invert blockquote {
+  border-left-color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.8);
+}
+.prose-invert a {
+  color: white;
+}
+.prose-invert th, .prose-invert td {
+  border-color: rgba(255,255,255,0.2);
+}
+.prose-invert th {
+  background-color: rgba(255,255,255,0.1);
+}
+.prose-invert hr {
+  border-top-color: rgba(255,255,255,0.2);
+}

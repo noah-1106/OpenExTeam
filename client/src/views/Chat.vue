@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, nextTick } from 'vue'
 import { useChatStore } from '../stores/chat'
+import { marked } from 'marked'
 
 const props = defineProps({
   agents: { type: Array, required: true },
@@ -13,6 +14,12 @@ const chatContainer = ref(null)
 
 // 直接引用 store 中的状态（模板中使用 chatStore.xxx）
 const activeSession = computed(() => chatStore.activeSession())
+
+// 渲染 Markdown
+function renderMarkdown(text) {
+  if (!text) return ''
+  return marked(text, { breaks: true, gfm: true })
+}
 
 // 检查当前会话是否有至少一个已连接的 agent
 const isSessionConnected = computed(() => {
@@ -99,6 +106,36 @@ function getStatusColor(agent) {
         <h2 class="text-sm font-semibold text-primary">消息</h2>
       </div>
       <div class="flex-1 overflow-y-auto py-2">
+        <!-- 系统通知 -->
+        <div class="px-3 mb-1">
+          <div class="text-xs font-semibold text-muted uppercase tracking-wide px-2 py-1">系统通知</div>
+          <div
+            v-for="sess in chatStore.sessions.filter(s => s.type === 'system')"
+            :key="sess.id"
+            @click="selectSession(sess.id)"
+            :class="[
+              'flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer transition-colors mb-0.5',
+              chatStore.activeSessionId === sess.id ? 'bg-accent-dim' : 'hover:bg-surface-raised'
+            ]"
+          >
+            <div class="relative flex-shrink-0">
+              <div class="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-base">
+                <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+              </div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <span :class="['text-sm font-medium', chatStore.activeSessionId === sess.id ? 'text-accent' : 'text-primary']">
+                  {{ sess.name }}
+                </span>
+                <span class="text-xs text-muted flex-shrink-0">{{ getLastTime(sess) }}</span>
+              </div>
+              <p class="text-xs text-secondary truncate mt-0.5">{{ getLastMessage(sess) }}</p>
+            </div>
+          </div>
+        </div>
         <!-- 单聊 -->
         <div class="px-3 mb-1">
           <div class="text-xs font-semibold text-muted uppercase tracking-wide px-2 py-1">单聊</div>
@@ -186,7 +223,7 @@ function getStatusColor(agent) {
             <span v-if="activeSession?.type === 'p2p' && agents.find(a => a.id === activeSession?.agentId)?.connected === false" class="ml-2 px-2 py-0.5 text-xs bg-red-50 text-red-500 rounded">已解绑</span>
           </div>
           <div class="text-xs text-muted">
-            {{ activeSession?.type === 'group' ? `${activeSession?.agentIds?.length || 0} 位成员` : '私聊' }}
+            {{ activeSession?.type === 'system' ? '系统工作流通知' : (activeSession?.type === 'group' ? `${activeSession?.agentIds?.length || 0} 位成员` : '私聊') }}
           </div>
         </div>
         <button
@@ -227,11 +264,23 @@ function getStatusColor(agent) {
           <div class="max-w-[70%]">
             <div
               :class="[
+                'px-4 py-2.5 rounded-2xl text-sm leading-relaxed',
+                msg.sender === 'user'
+                  ? 'bg-accent text-white rounded-br-md'
+                  : 'bg-surface text-primary border border-border-subtle rounded-bl-md prose prose-sm max-w-none',
+                msg.sender === 'user' ? 'prose-invert' : ''
+              ]"
+              v-if="msg.sender !== 'user'"
+              v-html="renderMarkdown(msg.text)"
+            ></div>
+            <div
+              :class="[
                 'px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap',
                 msg.sender === 'user'
                   ? 'bg-accent text-white rounded-br-md'
                   : 'bg-surface text-primary border border-border-subtle rounded-bl-md'
               ]"
+              v-else
             >
               {{ msg.text }}
             </div>
@@ -263,7 +312,10 @@ function getStatusColor(agent) {
 
       <!-- 输入框 -->
       <div class="px-6 py-4 bg-surface border-t border-border-subtle">
-        <div v-if="isSessionConnected" class="flex items-end gap-3">
+        <div v-if="activeSession?.type === 'system'" class="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-center text-sm text-gray-600">
+          ℹ️ 系统通知会话仅用于接收工作流进度更新
+        </div>
+        <div v-else-if="isSessionConnected" class="flex items-end gap-3">
           <textarea
             v-model="inputText"
             @keydown="handleKeydown"

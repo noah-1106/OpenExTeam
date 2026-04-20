@@ -7,7 +7,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import api from '../api/client';
 
-const SSE_URL = 'http://121.4.84.159:4000/api/events';
+const SSE_URL = window.location.origin.replace(/:\d+$/, ':4000') + '/api/events';
 let es = null;
 
 export const useChatStore = defineStore('chat', () => {
@@ -16,19 +16,67 @@ export const useChatStore = defineStore('chat', () => {
   const activeSessionId = ref(null);
   const agents = ref([]); // 当前 agents 列表（从 BoardStore 同步）
 
+  // 跟踪流式消息：key = messageId, value = { sessionId, messageIndex }
+  const streamingMessages = ref(new Map());
+
+  // 确保系统会话存在
+  function ensureSystemSession() {
+    let systemSess = sessions.value.find(s => s.id === 'system-notifications');
+    if (!systemSess) {
+      systemSess = {
+        id: 'system-notifications',
+        type: 'system',
+        name: '系统通知',
+        avatarUrl: null,
+        messages: [],
+      };
+      sessions.value.unshift(systemSess); // 放在最前面
+    }
+    return systemSess;
+  }
+
   // SSE 连接
   function connectSSE() {
     if (es) es.close();
     es = new EventSource(SSE_URL);
 
-    // Agent 回复消息
+    // Agent 回复消息 - 使用 messageId 和 state 处理流式消息
     es.addEventListener('agent_message', (e) => {
       const msg = JSON.parse(e.data);
       const msgAgent = msg.agent || msg.from;
-      // 找到对应的会话，追加消息
+      const content = msg.content || msg.text || msg.output || JSON.stringify(msg.result || msg);
+      const messageId = msg.messageId;
+      const state = msg.state; // "delta" 或 "final"
+
+      console.log('[Chat] Received message:', { messageId, state, agent: msgAgent, from: msg.from, type: msg.type, content });
+
+      // 检查是否是系统消息（工作流通知）
+      if (msg.from === 'system' || msg.type?.startsWith('workflow_') || msg.type?.startsWith('message_')) {
+        console.log('[Chat] System/workflow message, routing to system session');
+        const systemSess = ensureSystemSession();
+
+        // 添加系统消息
+        const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        const displayContent = typeof content === 'string' ? content :
+                             (content.title ? `${content.title}\n${content.message || ''}` : JSON.stringify(content));
+        systemSess.messages.push({
+          sender: 'system',
+          text: displayContent,
+          time: timeStr,
+          jobId: msg.jobId,
+          msgType: msg.type
+        });
+
+        // 如果当前没有选中会话，自动选中系统会话
+        if (!activeSessionId.value) {
+          activeSessionId.value = systemSess.id;
+        }
+        return;
+      }
+
+      // 找到对应的会话
       const sess = sessions.value.find(s => {
         if (s.type === 'p2p') {
-          // 兼容两种情况：s.agentId 就是纯 agent id，或者是 adapterName:agentId 格式
           const sAgentPart = s.agentId.includes(':') ? s.agentId.split(':').pop() : s.agentId;
           return s.agentId === msgAgent || sAgentPart === msgAgent;
         }
@@ -40,13 +88,49 @@ export const useChatStore = defineStore('chat', () => {
         }
         return false;
       });
-      if (sess) {
-        sess.messages.push({
-          sender: msg.agent || msg.from,
-          agentId: msg.agent || msg.from,
-          text: msg.content || msg.text || msg.output || JSON.stringify(msg.result),
-          time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+
+      if (!sess) {
+        console.log('[Chat] No session found for agent:', msgAgent);
+        return;
+      }
+
+      // 检查是否是已有流式消息的更新
+      if (messageId && streamingMessages.value.has(messageId)) {
+        const streamState = streamingMessages.value.get(messageId);
+        if (streamState.sessionId === sess.id) {
+          // 更新现有消息
+          const existingMsg = sess.messages[streamState.messageIndex];
+          if (existingMsg) {
+            existingMsg.text = content;
+            console.log('[Chat] Updated streaming message:', messageId);
+
+            // 如果是 final 状态，清理跟踪
+            if (state === 'final') {
+              streamingMessages.value.delete(messageId);
+              console.log('[Chat] Stream finished:', messageId);
+            }
+            return;
+          }
+        }
+      }
+
+      // 新消息
+      const newMessage = {
+        sender: msgAgent,
+        agentId: msgAgent,
+        text: content,
+        time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      };
+      sess.messages.push(newMessage);
+      console.log('[Chat] Added new message, total:', sess.messages.length);
+
+      // 如果是 delta 状态，开始跟踪
+      if (messageId && (state === 'delta' || state !== 'final')) {
+        streamingMessages.value.set(messageId, {
+          sessionId: sess.id,
+          messageIndex: sess.messages.length - 1,
         });
+        console.log('[Chat] Started tracking stream:', messageId);
       }
     });
 
@@ -54,7 +138,6 @@ export const useChatStore = defineStore('chat', () => {
     es.addEventListener('agent_callback', (e) => {
       const cb = JSON.parse(e.data);
       if (cb.result?.output) {
-        // 找到 active session 通知
         console.log('[Chat] Agent callback:', cb);
       }
     });
@@ -72,12 +155,27 @@ export const useChatStore = defineStore('chat', () => {
       console.log('[ChatStore] agentList is empty, skipping initialization');
       return;
     }
-    
+
     agents.value = agentList;
-    
+
+    // 保存现有系统会话的消息
+    const existingSystemSess = sessions.value.find(s => s.id === 'system-notifications');
+    const systemMessages = existingSystemSess?.messages || [];
+
     // 清除现有会话，重新初始化
     sessions.value = [];
-    
+
+    // 重新添加系统会话（保留消息）
+    if (systemMessages.length > 0) {
+      sessions.value.push({
+        id: 'system-notifications',
+        type: 'system',
+        name: '系统通知',
+        avatarUrl: null,
+        messages: systemMessages,
+      });
+    }
+
     // 为每个 Agent 创建私聊会话
     agentList.forEach(ag => {
       sessions.value.push({
@@ -100,8 +198,12 @@ export const useChatStore = defineStore('chat', () => {
       messages: [],
     });
 
-    // 默认选中第一个私聊
-    activeSessionId.value = sessions.value[0].id;
+    // 确保系统会话存在
+    ensureSystemSession();
+
+    // 默认选中第一个私聊（如果有），否则选中系统会话
+    const firstP2p = sessions.value.find(s => s.type === 'p2p');
+    activeSessionId.value = firstP2p?.id || 'system-notifications';
   }
 
   // 发送消息
@@ -109,9 +211,20 @@ export const useChatStore = defineStore('chat', () => {
     const sess = sessions.value.find(s => s.id === activeSessionId.value);
     if (!sess || !text.trim()) return;
 
+    // 系统会话不支持发送消息
+    if (sess.type === 'system') {
+      console.log('[Chat] Cannot send messages to system session');
+      return;
+    }
+
     const timeStr = new Date().toLocaleTimeString('zh-CN', {
       hour: '2-digit', minute: '2-digit'
     });
+
+    console.log('[Chat] Sending user message:', text);
+
+    // 发送新消息前，清理该会话的所有流式跟踪状态
+    streamingMessages.value.clear();
 
     // 添加用户消息
     sess.messages.push({ sender: 'user', text: text.trim(), time: timeStr });
@@ -119,12 +232,10 @@ export const useChatStore = defineStore('chat', () => {
     // 检查连接状态
     let hasConnectedAgent = false;
     if (sess.type === 'p2p') {
-      // 查找对应 agent，检查连接状态
       const agentId = sess.agentId.includes(':') ? sess.agentId.split(':').pop() : sess.agentId;
       const agent = agents.value.find(a => a.id === agentId || a.id === sess.agentId);
       hasConnectedAgent = agent?.connected || false;
     } else if (sess.type === 'group') {
-      // 检查是否至少有一个 agent 已连接
       hasConnectedAgent = sess.agentIds.some(agId => {
         const pureId = agId.includes(':') ? agId.split(':').pop() : agId;
         const agent = agents.value.find(a => a.id === pureId || a.id === agId);
@@ -146,7 +257,6 @@ export const useChatStore = defineStore('chat', () => {
       if (sess.type === 'p2p') {
         await api.sendMessage(sess.agentId, text.trim(), 'chat');
       } else {
-        // 群聊：发给所有已连接的 Agent
         await Promise.all(
           sess.agentIds.map(async agId => {
             const pureId = agId.includes(':') ? agId.split(':').pop() : agId;
@@ -159,7 +269,6 @@ export const useChatStore = defineStore('chat', () => {
       }
     } catch (err) {
       console.error('[Chat] sendMessage error:', err);
-      // 网络错误时添加错误提示
       sess.messages.push({
         sender: 'system',
         text: `发送失败：${err.message}`,
@@ -203,5 +312,6 @@ export const useChatStore = defineStore('chat', () => {
     selectSession,
     activeSession,
     addGroupSession,
+    ensureSystemSession,
   };
 });
