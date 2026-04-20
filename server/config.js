@@ -11,7 +11,7 @@ const DB_FILE = path.join(__dirname, 'db', 'openexteam.db');
 
 // 确保数据目录存在
 if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true);
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 if (!fs.existsSync(path.dirname(DB_FILE))) {
   fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });

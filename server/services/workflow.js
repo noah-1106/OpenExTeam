@@ -37,7 +37,6 @@ function startWorkflow(jobId, activeAdapters) {
   });
   broadcast('task_updated', { taskId: firstTodo.id, status: 'in-progress' });
 
-  // 发送消息给 Agent（通过 adapter）
   sendTaskToAgent(firstTodo, jobId, stepIndex, tasks.length, activeAdapters);
 
   return {
