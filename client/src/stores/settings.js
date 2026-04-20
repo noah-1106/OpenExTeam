@@ -5,7 +5,8 @@
 
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import api from '../api/client';
+
+const API_BASE = window.location.origin.replace(/:\d+$/, ':4000');
 
 export const useSettingsStore = defineStore('settings', () => {
   // 已保存的适配器列表
@@ -14,7 +15,7 @@ export const useSettingsStore = defineStore('settings', () => {
   // 加载所有适配器
   async function fetchAdapters() {
     try {
-      const res = await fetch('http://localhost:4000/api/config/adapters');
+      const res = await fetch(`${API_BASE}/api/config/adapters`);
       const data = await res.json();
       adapters.value = data.adapters || [];
     } catch (err) {
@@ -25,22 +26,27 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 测试连接
   async function testAdapter(config) {
-    const res = await fetch('http://localhost:4000/api/adapter/test', {
+    const res = await fetch(`${API_BASE}/api/adapter/test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
+      body: JSON.stringify({ type: config.type || config.id, url: config.url, token: config.token }),
     });
-    return res.ok;
+    if (!res.ok) return { success: false };
+    const data = await res.json();
+    return data; // 返回完整结果，包含 pairing_required 等信息
   }
 
   // 保存适配器配置
   async function saveAdapter(config) {
     // 先调用 test
-    const ok = await testAdapter(config);
-    if (!ok) throw new Error('连接测试失败');
+    const result = await testAdapter(config);
+    if (result.pairing_required) {
+      throw new Error(`请先完成设备配对: ${result.message}`);
+    }
+    if (!result.success) throw new Error('连接测试失败');
 
     // 保存到配置
-    const res = await fetch('http://localhost:4000/api/config/adapters', {
+    const res = await fetch(`${API_BASE}/api/config/adapters`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ adapters: [...adapters.value, config] }),
@@ -51,9 +57,12 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   // 删除适配器
-  async function deleteAdapter(id) {
-    const filtered = adapters.value.filter(a => a.id !== id);
-    const res = await fetch('http://localhost:4000/api/config/adapters', {
+  async function deleteAdapter(conn) {
+    // 根据 id 或 name 过滤
+    const filtered = adapters.value.filter(a => 
+      (conn.id && a.id !== conn.id) || (conn.name && a.name !== conn.name)
+    );
+    const res = await fetch(`${API_BASE}/api/config/adapters`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ adapters: filtered }),

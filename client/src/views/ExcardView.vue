@@ -118,7 +118,10 @@ function addRedline() {
 function removeRedline(idx) { newExcard.value.redlines.splice(idx, 1) }
 
 async function createExcard() {
-  if (!newExcard.value.name.trim() || !newExcard.value.agentName) return
+  if (!newExcard.value.name.trim() || !newExcard.value.agentName || !newExcard.value.description.trim()) {
+    alert('请填写完整信息：名称、绑定 Agent、描述为必填项')
+    return
+  }
   const num = String(store.excards.length + 1).padStart(3, '0')
   const agentSlug = newExcard.value.agentName.toLowerCase()
   const nameSlug = newExcard.value.name.toLowerCase().replace(/\s+/g, '-').slice(0, 20)
@@ -417,11 +420,11 @@ function getStepColor(idx) {
               <h4 class="text-sm font-semibold text-primary border-b border-border-subtle pb-1">基本信息</h4>
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs font-medium text-primary mb-1">卡片名称</label>
+                  <label class="block text-xs font-medium text-primary mb-1">卡片名称 <span class="text-red-500">*</span></label>
                   <input v-model="newExcard.name" type="text" placeholder="例如：标准文章创作" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent" />
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-primary mb-1">绑定 Agent</label>
+                  <label class="block text-xs font-medium text-primary mb-1">绑定 Agent <span class="text-red-500">*</span></label>
                   <select v-model="newExcard.agentName" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface">
                     <option value="">选择 Agent...</option>
                     <option v-for="ag in agentOptions" :key="ag.id" :value="ag.name">{{ ag.name }}</option>
@@ -437,7 +440,7 @@ function getStepColor(idx) {
                 </div>
               </div>
               <div>
-                <label class="block text-xs font-medium text-primary mb-1">描述</label>
+                <label class="block text-xs font-medium text-primary mb-1">描述 <span class="text-red-500">*</span></label>
                 <textarea v-model="newExcard.description" rows="2" placeholder="描述这个 ExCard 的用途和使用场景..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
               </div>
               <!-- 标签 -->

@@ -11,13 +11,11 @@ const emit = defineEmits(['select-framework'])
 
 const statusColors = {
   online: 'bg-green-500',
-  busy: 'bg-yellow-500',
   offline: 'bg-gray-400',
 }
 
 const statusText = {
   online: '在线',
-  busy: '忙碌',
   offline: '离线',
 }
 
@@ -85,7 +83,10 @@ function onSelectFramework(id) {
             />
           </div>
           <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium text-primary truncate">{{ agent.name }}</div>
+            <div class="text-sm font-medium text-primary truncate">
+              {{ agent.name }}
+              <span v-if="agent.connected === false" class="ml-1 px-1.5 py-0.5 text-[10px] bg-red-50 text-red-500 rounded">已解绑</span>
+            </div>
             <div class="text-xs text-muted truncate">
               {{ statusText[agent.status] }}
               <span v-if="agent.task">· {{ agent.task }}</span>

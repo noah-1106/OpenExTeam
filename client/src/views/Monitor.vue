@@ -7,7 +7,6 @@ const props = defineProps({
 
 const statusConfig = {
   online: { label: '在线', color: 'text-green-600', bg: 'bg-green-50' },
-  busy: { label: '忙碌', color: 'text-yellow-600', bg: 'bg-yellow-50' },
   offline: { label: '离线', color: 'text-muted', bg: 'bg-surface' },
 }
 
@@ -72,7 +71,10 @@ const logLevelStyles = {
             />
           </div>
           <div class="flex-1 min-w-0">
-            <h3 class="font-medium text-primary">{{ agent.name }}</h3>
+            <h3 class="font-medium text-primary">
+              {{ agent.name }}
+              <span v-if="agent.connected === false" class="ml-2 px-2 py-0.5 text-xs bg-red-50 text-red-500 rounded">已解绑</span>
+            </h3>
             <p :class="['text-sm mt-0.5', statusConfig[agent.status]?.color]">
               {{ statusConfig[agent.status]?.label }}
             </p>

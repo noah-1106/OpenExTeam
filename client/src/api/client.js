@@ -3,7 +3,7 @@
  * 基准地址: http://localhost:4000
  */
 
-const BASE = 'http://localhost:4000';
+const BASE = window.location.origin.replace(/:\d+$/, ':4000');
 
 async function request(method, path, body) {
   const opts = {

@@ -4,6 +4,100 @@ import { ref } from 'vue'
 const docs = ref([
   {
     id: 'doc-1',
+    title: 'Dashboard 与 OpenClaw Gateway 的配对方式',
+    content: `## Dashboard 与 OpenClaw Gateway 的配对方式
+
+OpenExTeam Dashboard 是 **Operator 控制台**，通过标准 Gateway 协议连接用户自托管的 OpenClaw Gateway。
+
+⚠️ **重要：** OpenClaw 需要**设备配对**才能连接，不仅仅是 Token。
+
+### 用户使用步骤
+
+#### 第一步：在 **OpenExTeam** 添加连接
+
+**OpenExTeam Dashboard 端，进入设置页面：**
+- 填写 Gateway URL: \`ws://127.0.0.1:18789\`（或远程地址）
+- Operator Token: 从 Gateway 获取（\`openclaw config get gateway.auth.token\`）
+
+点击「测试连接」或「保存」后，Dashboard 会尝试连接 Gateway。
+
+#### 第二步：在 Gateway 端批准配对
+
+**Gateway 端（终端执行）：**
+\`\`\`bash
+# 查看待配对设备
+openclaw devices list
+
+# 批准 Dashboard 设备
+openclaw devices approve <requestId>
+\`\`\`
+
+#### 第三步：Dashboard 自动连接
+
+配对批准后，Dashboard 会自动完成连接并开始通信。
+
+### 部署模式
+
+#### 模式一：本地开发（同机运行）
+
+\`\`\`bash
+# 1. 启动 Gateway
+openclaw gateway start
+
+# 2. 查看/配置 token
+openclaw config get gateway.auth.token
+
+# 3. Dashboard 配置 ws://127.0.0.1:18789
+
+# 4. 批准配对（当 Dashboard 提示时）
+openclaw devices list
+openclaw devices approve <requestId>
+\`\`\`
+
+#### 模式二：Tailscale 网络（不同机运行）
+
+\`\`\`bash
+# 1. 确保服务器和本地都在 Tailscale 网络
+# 2. Dashboard 配置 ws://<服务器TailscaleIP>:18789
+# 3. 在服务器批准配对
+\`\`\`
+
+### Dashboard 连接配置字段说明
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| 连接名称 | 给这个连接起个名字 | 我的 OpenClaw |
+| Gateway URL | Gateway WebSocket 地址 | ws://127.0.0.1:18789 |
+| Operator Token | Gateway 认证令牌 | sk-xxxxxx |
+
+### 验证连接
+
+点击「测试连接」后，Dashboard 会：
+1. 建立 WebSocket 连接
+2. 等待 Gateway 发送 \`connect.challenge\`
+3. 发送 \`connect\` 请求（role=operator + token）
+4. 如果返回 NOT_PAIRED，显示提示信息：「请在 Gateway 端运行 \`openclaw devices approve <requestId>\` 批准配对」
+5. 用户批准后，Dashboard 使用 device 身份完成连接
+
+### 常见错误排查
+
+| 错误 | 原因 | 解决 |
+|------|------|------|
+| NOT_PAIRED | 设备未配对 | 在 Gateway 端运行 \`openclaw devices approve\` |
+| DEVICE_IDENTITY_REQUIRED | 缺少 device 身份 | Dashboard 会自动生成 device keypair |
+| Connection refused | Gateway 未启动 | 检查 \`openclaw gateway status\` |
+| Authentication failed | Token 不匹配 | 确认 token 与 \`gateway.auth.token\` 一致 |
+
+### 安全建议
+
+1. **生产环境**：使用 Tailscale 或 TLS (\`wss://\`)
+2. **Token 轮换**：定期执行 \`openclaw config set gateway.auth.token\`
+3. **设备管理**：定期查看已配对设备 \`openclaw devices list\`
+4. **撤销配对**：使用 \`openclaw devices reject <requestId>\` 移除不信任设备`,
+    category: '使用指南',
+  },
+  {
+    id: 'doc-2',
     title: 'Task 固化规则',
     content: `## 固化条件
 
@@ -22,7 +116,7 @@ const docs = ref([
     category: 'Agent 行为准则',
   },
   {
-    id: 'doc-2',
+    id: 'doc-3',
     title: 'ExCard 命名规范',
     content: `## 命名格式
 
@@ -42,7 +136,7 @@ EC{编号}-{AgentID}-{描述}
     category: '团队规范',
   },
   {
-    id: 'doc-3',
+    id: 'doc-4',
     title: 'Job 创建指南',
     content: `## Job 定义
 
@@ -63,7 +157,7 @@ Job 是工作容器，可以包含：
     category: '使用指南',
   },
   {
-    id: 'doc-4',
+    id: 'doc-5',
     title: 'Skill 下载',
     content: `## OpenExCard 相关 Skill
 
@@ -107,6 +201,7 @@ function getCategoryColor(category) {
 }
 </script>
 
+
 <template>
   <div class="h-full flex gap-4">
     <!-- 左侧：文档列表 -->
@@ -148,7 +243,7 @@ function getCategoryColor(category) {
           <h3 class="text-lg font-semibold text-primary">{{ selectedDoc.title }}</h3>
         </div>
         <!-- 内容 -->
-        <div class="flex-1 overflow-y-auto p-6">
+        <div class="flex-1 overflow-y-auto p-6" style="max-height: calc(100vh - 200px);">
           <pre class="text-sm text-primary leading-relaxed whitespace-pre-wrap font-sans">{{ selectedDoc.content }}</pre>
         </div>
       </div>

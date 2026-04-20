@@ -314,7 +314,10 @@ const statusOptions = [
                 <label class="block text-sm font-medium text-primary mb-1.5">负责人</label>
                 <select v-model="newTask.agent"
                   class="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent bg-surface">
-                  <option v-for="agent in agents" :key="agent.id" :value="agent.name">{{ agent.name }}</option>
+                  <option v-for="agent in agents" :key="agent.id" :value="agent.name">
+                    {{ agent.name }}
+                    <span v-if="agent.connected === false"> (已解绑)</span>
+                  </option>
                 </select>
               </div>
               <div>

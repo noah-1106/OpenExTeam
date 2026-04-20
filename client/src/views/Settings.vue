@@ -13,7 +13,7 @@ const frameworks = [
 const selectedFramework = ref('')
 const showAddForm = ref(false)
 const formData = ref({ name: '', url: '', token: '' })
-const testResult = ref(null) // null | 'success' | 'failed'
+const testResult = ref(null)
 const testing = ref(false)
 const saving = ref(false)
 
@@ -33,14 +33,22 @@ async function testConnection() {
   testing.value = true
   testResult.value = null
   try {
-    const ok = await settingsStore.testAdapter({
+    const result = await settingsStore.testAdapter({
       id: selectedFramework.value,
       name: formData.value.name,
       url: formData.value.url,
       token: formData.value.token,
     })
-    testResult.value = ok ? 'success' : 'failed'
-  } catch {
+    
+    // 处理配对提示
+    if (result.pairing_required) {
+      testResult.value = 'pairing_required'
+      formData.value.pairingDeviceId = result.device_id
+      formData.value.pairingMessage = result.message
+    } else {
+      testResult.value = result.success ? 'success' : 'failed'
+    }
+  } catch (err) {
     testResult.value = 'failed'
   } finally {
     testing.value = false
@@ -67,10 +75,10 @@ async function saveConnection() {
   }
 }
 
-async function deleteConnection(id) {
+async function deleteConnection(conn) {
   if (!confirm('确定删除此连接？')) return
   try {
-    await settingsStore.deleteAdapter(id)
+    await settingsStore.deleteAdapter(conn)
   } catch (err) {
     alert('删除失败：' + err.message)
   }
@@ -79,7 +87,7 @@ async function deleteConnection(id) {
 
 
 <template>
-  <div class="max-w-4xl">
+  <div class="max-w-4xl h-full overflow-y-auto">
     <!-- Header -->
     <div class="mb-6">
       <h2 class="text-xl font-semibold text-primary mb-1">框架配对</h2>
@@ -92,9 +100,12 @@ async function deleteConnection(id) {
         <h3 class="font-medium text-primary">已连接的框架</h3>
       </div>
       <div class="divide-y divide-gray-50">
+        <div v-if="!settingsStore.adapters?.length" class="px-4 py-8 text-center text-muted text-sm">
+          暂无连接，点击下方按钮添加
+        </div>
         <div
-          v-for="conn in settingsStore.adapters"
-          :key="conn.id"
+          v-for="conn in settingsStore.adapters || []"
+          :key="conn.id || conn.name"
           class="px-4 py-4 flex items-center justify-between"
         >
           <div class="flex items-center gap-4">
@@ -113,11 +124,14 @@ async function deleteConnection(id) {
                 <span class="text-sm text-green-600">已连接</span>
               </div>
               <p class="text-xs text-muted mt-1">
-                上次心跳: {{ conn.lastHeartbeat }}
+                上次心跳: {{ conn.lastHeartbeat || '刚刚' }}
               </p>
             </div>
-            <button class="px-3 py-1.5 text-sm text-primary hover:bg-surface rounded-lg transition-colors">
-              编辑
+            <button 
+              @click="deleteConnection(conn)"
+              class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              删除
             </button>
           </div>
         </div>
@@ -156,36 +170,64 @@ async function deleteConnection(id) {
               <input
                 v-model="formData.name"
                 type="text"
-                placeholder="例如: 我的 OpenClaw"
+                placeholder="例如：我的 OpenClaw"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
               />
             </div>
+            
+            <!-- OpenClaw 特有配置说明 -->
+            <div v-if="selectedFramework === 'openclaw'" class="p-3 bg-blue-50 rounded-lg text-sm">
+              <p class="text-blue-800">
+                <strong>连接方式：</strong>Dashboard 作为 <code class="bg-blue-100 px-1 rounded">Operator</code> 角色通过 WebSocket 连接到 OpenClaw Gateway。
+                首次连接需在 Gateway 端执行 <code class="bg-blue-100 px-1 rounded">openclaw devices approve &lt;requestId&gt;</code> 批准配对。
+              </p>
+            </div>
+
             <div>
-              <label class="block text-sm font-medium text-primary mb-1">Gateway URL</label>
+              <label class="block text-sm font-medium text-primary mb-1">Gateway WebSocket URL</label>
               <input
                 v-model="formData.url"
                 type="text"
-                placeholder="http://localhost:18789"
+                placeholder="ws://127.0.0.1:18789"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
               />
+              <p class="mt-1 text-xs text-muted">
+                <strong>本地开发（同机）：</strong><code class="bg-surface-raised px-1 rounded">ws://127.0.0.1:18789</code>
+                <br/>
+                <strong>Tailscale 网络（不同机）：</strong><code class="bg-surface-raised px-1 rounded">ws://&lt;服务器TailscaleIP&gt;:18789</code>
+              </p>
             </div>
             <div>
-              <label class="block text-sm font-medium text-primary mb-1">Token</label>
+              <label class="block text-sm font-medium text-primary mb-1">Operator Token</label>
               <input
                 v-model="formData.token"
                 type="password"
-                placeholder="输入您的 Gateway Token"
+                placeholder="输入 Gateway 配置的 token"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
               />
+              <p class="mt-1 text-xs text-muted">
+                Gateway 配置文件中的 <code class="bg-surface-raised px-1 rounded">gateway.auth.token</code>。
+                可通过 <code class="bg-surface-raised px-1 rounded">openclaw config get gateway.auth.token</code> 查看，
+                未设置时用 <code class="bg-surface-raised px-1 rounded">openclaw config set gateway.auth.token "新token"</code> 配置
+              </p>
             </div>
 
             <!-- Test Result -->
             <div v-if="testResult" :class="[
               'p-3 rounded-lg text-sm',
-              testResult === 'success' ? 'bg-green-50 text-green-700' : 'bg-surface-raised text-red-700'
+              testResult === 'success' ? 'bg-green-50 text-green-700' : 
+              testResult === 'pairing_required' ? 'bg-yellow-50 text-yellow-700' : 
+              'bg-red-50 text-red-700'
             ]">
-              <span v-if="testResult === 'success'">✅ 连接成功！</span>
-              <span v-else>❌ 连接失败，请检查 URL 和 Token</span>
+              <span v-if="testResult === 'success'">✅ 连接成功！Gateway 协议握手完成</span>
+              <span v-else-if="testResult === 'pairing_required'">
+                ⏳ 等待设备配对批准
+                <br/>
+                <strong>Device ID:</strong> <code class="bg-yellow-100 px-1 rounded">{{ formData.pairingDeviceId }}</code>
+                <br/>
+                <strong>操作:</strong> {{ formData.pairingMessage }}
+              </span>
+              <span v-else>❌ 连接失败，请检查 URL 和 Token 是否正确</span>
             </div>
 
             <div class="flex gap-3 pt-2">

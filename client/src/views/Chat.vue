@@ -14,6 +14,25 @@ const chatContainer = ref(null)
 // 直接引用 store 中的状态（模板中使用 chatStore.xxx）
 const activeSession = computed(() => chatStore.activeSession())
 
+// 检查当前会话是否有至少一个已连接的 agent
+const isSessionConnected = computed(() => {
+  const sess = activeSession.value
+  if (!sess) return false
+  
+  if (sess.type === 'p2p') {
+    const agentId = sess.agentId.includes(':') ? sess.agentId.split(':').pop() : sess.agentId;
+    const agent = props.agents.find(a => a.id === agentId || a.id === sess.agentId);
+    return agent?.connected || false;
+  } else if (sess.type === 'group') {
+    return sess.agentIds.some(agId => {
+      const pureId = agId.includes(':') ? agId.split(':').pop() : agId;
+      const agent = props.agents.find(a => a.id === pureId || a.id === agId);
+      return agent?.connected || false;
+    });
+  }
+  return false;
+})
+
 function selectSession(id) {
   chatStore.selectSession(id)
   scrollToBottom()
@@ -68,7 +87,7 @@ function getLastTime(sess) {
 
 function getStatusColor(agent) {
   const colors = { online: 'bg-green-400', busy: 'bg-yellow-400', offline: 'bg-gray-300' }
-  return colors[agent.status] || 'bg-gray-300'
+  return colors[agent?.status] || 'bg-gray-300'
 }
 </script>
 
@@ -89,7 +108,7 @@ function getStatusColor(agent) {
             @click="selectSession(sess.id)"
             :class="[
               'flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer transition-colors mb-0.5',
-              chatStore.chatStore.activeSessionId === sess.id ? 'bg-accent-dim' : 'hover:bg-surface-raised'
+              chatStore.activeSessionId === sess.id ? 'bg-accent-dim' : 'hover:bg-surface-raised'
             ]"
           >
             <div class="relative flex-shrink-0">
@@ -106,8 +125,9 @@ function getStatusColor(agent) {
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
-                <span :class="['text-sm font-medium', chatStore.chatStore.activeSessionId === sess.id ? 'text-accent' : 'text-primary']">
+                <span :class="['text-sm font-medium', chatStore.activeSessionId === sess.id ? 'text-accent' : 'text-primary']">
                   {{ sess.name }}
+                  <span v-if="agents.find(a => a.id === sess.agentId)?.connected === false" class="ml-1 px-1 py-0.5 text-[10px] bg-red-50 text-red-500 rounded">已解绑</span>
                 </span>
                 <span class="text-xs text-muted flex-shrink-0">{{ getLastTime(sess) }}</span>
               </div>
@@ -124,7 +144,7 @@ function getStatusColor(agent) {
             @click="selectSession(sess.id)"
             :class="[
               'flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer transition-colors mb-0.5',
-              chatStore.chatStore.activeSessionId === sess.id ? 'bg-accent-dim' : 'hover:bg-surface-raised'
+              chatStore.activeSessionId === sess.id ? 'bg-accent-dim' : 'hover:bg-surface-raised'
             ]"
           >
             <div class="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center text-base flex-shrink-0">
@@ -133,7 +153,7 @@ function getStatusColor(agent) {
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
-                <span :class="['text-sm font-medium', chatStore.chatStore.activeSessionId === sess.id ? 'text-accent' : 'text-primary']">
+                <span :class="['text-sm font-medium', chatStore.activeSessionId === sess.id ? 'text-accent' : 'text-primary']">
                   {{ sess.name }}
                 </span>
                 <span class="text-xs text-muted flex-shrink-0">{{ getLastTime(sess) }}</span>
@@ -150,7 +170,7 @@ function getStatusColor(agent) {
       <!-- 头部 -->
       <div class="px-6 py-4 bg-surface border-b border-border-subtle flex items-center gap-3">
         <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
-          <img v-if="activeSession.avatarUrl" :src="activeSession.avatarUrl" class="w-full h-full object-cover" />
+          <img v-if="activeSession?.avatarUrl" :src="activeSession.avatarUrl" class="w-full h-full object-cover" />
           <svg v-else class="w-full h-full" viewBox="0 0 36 36" fill="none">
             <circle cx="18" cy="18" r="18" fill="#F5F4F0"/>
             <rect x="10" y="12" width="16" height="12" rx="3" stroke="#78716C" stroke-width="1.5"/>
@@ -161,13 +181,16 @@ function getStatusColor(agent) {
           </svg>
         </div>
         <div class="flex-1">
-          <div class="font-semibold text-primary">{{ activeSession.name }}</div>
+          <div class="font-semibold text-primary">
+            {{ activeSession?.name }}
+            <span v-if="activeSession?.type === 'p2p' && agents.find(a => a.id === activeSession?.agentId)?.connected === false" class="ml-2 px-2 py-0.5 text-xs bg-red-50 text-red-500 rounded">已解绑</span>
+          </div>
           <div class="text-xs text-muted">
-            {{ activeSession.type === 'group' ? `${activeSession.agentIds?.length || 0} 位成员` : '私聊' }}
+            {{ activeSession?.type === 'group' ? `${activeSession?.agentIds?.length || 0} 位成员` : '私聊' }}
           </div>
         </div>
         <button
-          v-if="activeSession.type === 'group'"
+          v-if="activeSession?.type === 'group'"
           class="px-3 py-1.5 text-xs text-secondary border border-border rounded-lg hover:bg-surface-raised"
         >
           群设置
@@ -177,7 +200,7 @@ function getStatusColor(agent) {
       <!-- 消息列表 -->
       <div ref="chatContainer" class="flex-1 overflow-y-auto px-6 py-4 space-y-1">
         <div
-          v-for="(msg, idx) in activeSession.messages"
+          v-for="(msg, idx) in activeSession?.messages"
           :key="idx"
           :class="['flex items-end gap-3', msg.sender === 'user' ? 'flex-row-reverse' : '']"
         >
@@ -219,7 +242,7 @@ function getStatusColor(agent) {
         </div>
 
         <!-- Typing 状态 -->
-        <div v-if="typing" class="flex items-end gap-3">
+        <div v-if="typing && activeSession" class="flex items-end gap-3">
           <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
             <svg class="w-full h-full" viewBox="0 0 36 36" fill="none">
               <circle cx="18" cy="18" r="18" fill="#F5F4F0"/>
@@ -240,7 +263,7 @@ function getStatusColor(agent) {
 
       <!-- 输入框 -->
       <div class="px-6 py-4 bg-surface border-t border-border-subtle">
-        <div class="flex items-end gap-3">
+        <div v-if="isSessionConnected" class="flex items-end gap-3">
           <textarea
             v-model="inputText"
             @keydown="handleKeydown"
@@ -257,6 +280,9 @@ function getStatusColor(agent) {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
             </svg>
           </button>
+        </div>
+        <div v-else class="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-center text-sm text-red-600">
+          🔌 {{ activeSession?.type === 'p2p' ? 'Agent 已离线' : '所有 Agent 都已离线' }}，无法发送消息
         </div>
       </div>
     </div>

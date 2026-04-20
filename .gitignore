@@ -1,2 +1,10 @@
 node_modules/
 dist/
+*.log
+server.log
+.DS_Store
+*.db
+config.json
+server/config.json
+.pi-debug-brief.md
+

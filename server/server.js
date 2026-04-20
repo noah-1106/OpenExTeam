@@ -124,8 +124,9 @@ async function initAdapters() {
     try {
       const adapter = createAdapter(ac.type, { url: ac.url, token: ac.token });
       await adapter.connect();
-      adapter.on('message', parsed => broadcast('agent_callback', parsed));
+      adapter.on('message', parsed => broadcast('agent_message', parsed));
       activeAdapters.set(ac.name, adapter);
+      broadcast('adapter_connected', { name: ac.name });
       console.log(`[Adapter] Connected: ${ac.name}`);
     } catch (err) { console.error(`[Adapter] ${ac.name}: ${err.message}`); }
   }
@@ -153,37 +154,129 @@ app.post('/api/adapter/test', async (req, res) => {
   const { type, url, token } = req.body;
   try {
     const a = createAdapter(type, { url, token });
-    await a.connect();
-    const ok = await a.healthCheck();
-    await a.disconnect();
-    res.json({ success: ok, message: ok ? 'OK' : 'Health check failed' });
-  } catch (err) { res.status(400).json({ success: false, message: err.message }); }
+    
+    // 监听配对提示事件
+    let pairingInfo = null;
+    let pairingComplete = false;
+    
+    a.on('pairing_required', (info) => {
+      pairingInfo = info;
+      console.log('[Adapter Test] Pairing required:', info);
+    });
+    
+    a.on('pairing_complete', (info) => {
+      pairingComplete = true;
+      console.log('[Adapter Test] Pairing complete:', info);
+    });
+    
+    // 尝试连接
+    const result = await a.connect().catch(err => ({ connected: false, err }));
+    
+    // 如果已经连接成功 (connect resolves without value on success, check a.connected instead)
+    if (a.connected) {
+      const ok = await a.healthCheck();
+      await a.disconnect();
+      res.json({ success: ok, message: ok ? 'OK' : 'Health check failed' });
+      return;
+    }
+    
+    // 如果连接失败且有配对信息，等待最多 30 秒让配对完成
+    if (pairingInfo) {
+      console.log('[Adapter Test] Waiting for pairing to complete (max 30s)...');
+      
+      // 等待配对完成，每秒检查一次
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        
+        if (pairingComplete) {
+          console.log('[Adapter Test] Pairing completed!');
+          // 配对完成后，重新尝试连接
+          const retryResult = await a.connect().catch(err => ({ connected: false, err }));
+          if (retryResult.connected) {
+            const ok = await a.healthCheck();
+            await a.disconnect();
+            res.json({ success: ok, message: ok ? 'OK' : 'Health check failed' });
+          } else {
+            res.status(400).json({ success: false, message: '配对完成但连接失败' });
+            await a.disconnect().catch(() => {});
+          }
+          return;
+        }
+      }
+      
+      // 超时，返回配对信息
+      res.json({ 
+        success: false, 
+        pairing_required: true,
+        device_id: pairingInfo.deviceId,
+        message: pairingInfo.message 
+      });
+      await a.disconnect().catch(() => {});
+      return;
+    }
+    
+    // 其他错误
+    await a.disconnect().catch(() => {});
+    res.status(400).json({ success: false, message: result.err?.message || '连接失败' });
+  } catch (err) { 
+    res.status(400).json({ success: false, message: err.message }); 
+  }
 });
 
 app.get('/api/agents', async (req, res) => {
   const all = [];
-  for (const [name, a] of activeAdapters) {
-    try { all.push(...(await a.listAgents()).map(ag => ({ ...ag, adapter: name }))); }
-    catch (err) { console.error(`[Agents] ${name}: ${err.message}`); }
+  for (const [name, a] of activeAdapters.entries()) {
+    try {
+      const agents = await a.listAgents();
+      // Prefix each agent ID with adapter name for global uniqueness
+      all.push(...agents.map(ag => ({
+        id: `${name}:${ag.id}`,
+        name: ag.name,
+        status: ag.status,
+        connected: ag.connected,
+        adapter: name
+      })));
+    } catch (err) {
+      console.error(`[Server] listAgents failed for adapter ${name}:`, err.message);
+    }
   }
   res.json({ agents: all });
 });
 
 // 发送消息
 app.post('/api/message/send', async (req, res) => {
-  const { agentId, agentName, content, type = 'chat' } = req.body;
-  if (!agentId && !agentName) return res.status(400).json({ error: 'agentId or agentName required' });
+  const { agentId, message, type, content } = req.body;
+  
+  // Parse agentId format: "adapterName:gatewayAgentId" (e.g., "openclaw-bibi:openclaw-bibi")
+  // or just "gatewayAgentId" (backward compatible)
+  let adapterName, gatewayAgentId;
+  if (agentId && agentId.includes(':')) {
+    const colonIdx = agentId.indexOf(':');
+    adapterName = agentId.slice(0, colonIdx);
+    gatewayAgentId = agentId.slice(colonIdx + 1);
+  } else {
+    // Backward compatible: use first adapter
+    adapterName = Array.from(activeAdapters.keys())[0];
+    gatewayAgentId = agentId;
+  }
+  
+  if (!gatewayAgentId) {
+    return res.status(400).json({ success: false, error: 'Invalid agentId' });
+  }
 
+  const messageContent = content || message;
   const messageId = uuidv4();
   queryRun('INSERT INTO message_log (id,type,from_agent,to_agent,content) VALUES (?,?,?,?,?)',
-    [messageId, type, 'dashboard', agentId || agentName, JSON.stringify(content)]);
+    [messageId, type || 'chat', 'dashboard', agentId, JSON.stringify(messageContent)]);
 
-  const adapter = activeAdapters.get(agentName || Object.keys(activeAdapters)[0]);
-  if (!adapter) return res.json({ success: true, messageId, warning: 'No adapter connected' });
+  const adapter = activeAdapters.get(adapterName);
+  if (!adapter) {
+    return res.status(400).json({ success: false, error: `Adapter not found: ${adapterName}` });
+  }
 
   try {
-    const result = await adapter.send(agentId, { type, content, callback: `http://localhost:${PORT}/webhook/task-complete` });
-    broadcast('message_sent', { messageId, agentId, content });
+    const result = await adapter.send(gatewayAgentId, { type: type || 'chat', content: messageContent, callback: `http://localhost:${PORT}/webhook/task-complete` });
+    broadcast('message_sent', { messageId, agentId, content: messageContent });
     res.json({ success: true, messageId, ...result });
   } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
@@ -202,10 +295,22 @@ app.post('/api/task/start', async (req, res) => {
 
   broadcast('task_updated', { taskId, status: 'in-progress' });
 
-  const adapter = Array.from(activeAdapters.values())[0];
+  // Parse agentId format: "adapterName:gatewayAgentId"
+  let adapterName, gatewayAgentId;
+  if (task.agent && task.agent.includes(':')) {
+    const colonIdx = task.agent.indexOf(':');
+    adapterName = task.agent.slice(0, colonIdx);
+    gatewayAgentId = task.agent.slice(colonIdx + 1);
+  } else {
+    // Backward compatible: use first adapter
+    adapterName = Array.from(activeAdapters.keys())[0];
+    gatewayAgentId = task.agent;
+  }
+
+  const adapter = activeAdapters.get(adapterName);
   if (adapter) {
     try {
-      await adapter.send(task.agent, { type: 'task_assign', taskId: task.id, content: { title: task.title, description: task.description } });
+      await adapter.send(gatewayAgentId, { type: 'task_assign', taskId: task.id, content: { title: task.title, description: task.description } });
     } catch (err) { console.error('[Task]', err.message); }
   }
   res.json({ success: true, taskId, status: 'in-progress' });
@@ -287,9 +392,21 @@ app.post('/api/workflow/start', (req, res) => {
   broadcast('workflow_started', { jobId, currentStep: stepIndex, totalSteps: tasks.length });
   broadcast('task_updated', { taskId: firstTodo.id, status: 'in-progress' });
 
-  const adapter = Array.from(activeAdapters.values())[0];
+  // Parse agentId format: "adapterName:gatewayAgentId"
+  let adapterName, gatewayAgentId;
+  if (firstTodo.agent && firstTodo.agent.includes(':')) {
+    const colonIdx = firstTodo.agent.indexOf(':');
+    adapterName = firstTodo.agent.slice(0, colonIdx);
+    gatewayAgentId = firstTodo.agent.slice(colonIdx + 1);
+  } else {
+    // Backward compatible: use first adapter
+    adapterName = Array.from(activeAdapters.keys())[0];
+    gatewayAgentId = firstTodo.agent;
+  }
+
+  const adapter = activeAdapters.get(adapterName);
   if (adapter) {
-    adapter.send(firstTodo.agent, {
+    adapter.send(gatewayAgentId, {
       type: 'workflow_step', jobId, taskId: firstTodo.id, stepIndex, totalSteps: tasks.length,
       content: { title: firstTodo.title, description: firstTodo.description, context: `步骤 ${stepIndex}/${tasks.length}` }
     }).catch(err => console.error('[Workflow]', err.message));
@@ -340,9 +457,21 @@ function advanceWorkflow(jobId, res) {
     broadcast('workflow_step', { jobId, nextTaskId: next.id, stepIndex, totalSteps: tasks.length });
     broadcast('task_updated', { taskId: next.id, status: 'in-progress' });
 
-    const adapter = Array.from(activeAdapters.values())[0];
+    // Parse agentId format: "adapterName:gatewayAgentId"
+    let adapterName, gatewayAgentId;
+    if (next.agent && next.agent.includes(':')) {
+      const colonIdx = next.agent.indexOf(':');
+      adapterName = next.agent.slice(0, colonIdx);
+      gatewayAgentId = next.agent.slice(colonIdx + 1);
+    } else {
+      // Backward compatible: use first adapter
+      adapterName = Array.from(activeAdapters.keys())[0];
+      gatewayAgentId = next.agent;
+    }
+
+    const adapter = activeAdapters.get(adapterName);
     if (adapter) {
-      adapter.send(next.agent, {
+      adapter.send(gatewayAgentId, {
         type: 'workflow_step', jobId, taskId: next.id, stepIndex, totalSteps: tasks.length,
         content: { title: next.title, description: next.description, context: `自动推进：${stepIndex}/${tasks.length}` }
       }).catch(err => console.error('[Workflow]', err.message));
@@ -401,6 +530,16 @@ app.delete('/api/excards/:id', (req, res) => {
 // Health
 // ================================
 app.get('/health', (_, res) => res.json({ ok: true, timestamp: new Date().toISOString(), version: '0.2.0', adapters: [...activeAdapters.keys()], sseClients: sseClients.size }));
+
+// ================================
+// 静态文件（前端构建产物）- 放在 API 路由之后
+// ================================
+app.use(express.static(path.join(__dirname, '../client/dist')));
+
+// 所有非 API 路由回退到 index.html（SPA 路由支持）
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+});
 
 // ================================
 // 启动

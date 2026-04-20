@@ -7,7 +7,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import api from '../api/client';
 
-const SSE_URL = 'http://localhost:4000/api/events';
+const SSE_URL = window.location.origin.replace(/:\d+$/, ':4000') + '/api/events';
 let es = null; // EventSource
 
 export const useBoardStore = defineStore('board', () => {
@@ -59,9 +59,13 @@ export const useBoardStore = defineStore('board', () => {
       const job = jobs.value.find(j => j.id === d.jobId);
       if (job) Object.assign(job, d);
     });
+
+    es.addEventListener('adapter_connected', () => {
+      console.log('[BoardStore] Adapter connected, re-fetching agents');
+      fetchAll();
+    });
   }
 
-  // ========================
   // 数据加载
   // ========================
   async function fetchAll() {
@@ -72,9 +76,11 @@ export const useBoardStore = defineStore('board', () => {
         api.getTasks(),
         api.getAgents(),
       ]);
+      console.log('[BoardStore] fetchAll agentsRes:', agentsRes);
       jobs.value = jobsRes.jobs || [];
       tasks.value = tasksRes.tasks || [];
       agents.value = agentsRes.agents || [];
+      console.log('[BoardStore] agents set to:', agents.value);
     } catch (err) {
       console.error('[BoardStore] fetchAll:', err);
     } finally {
