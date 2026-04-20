@@ -7,18 +7,15 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { initDb } = require('./models/db');
-const { setupSSE } = require('./events/sse');
-const { setupJobsRoutes } = require('./routes/jobs');
+const { setupSSE, broadcast } = require('./events/sse');
 const { loadConfig, saveConfig } = require('./config');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// 中间件
 app.use(cors());
 app.use(express.json());
 
-// 状态
 const activeAdapters = new Map();
 
 async function initAdapters() {
@@ -30,11 +27,9 @@ async function initAdapters() {
       const adapter = createAdapter(ac.type, { url: ac.url, token: ac.token });
       await adapter.connect();
       adapter.on('message', parsed => {
-        const { broadcast } = require('./events/sse');
         broadcast('agent_message', parsed);
       });
       activeAdapters.set(ac.name, adapter);
-      const { broadcast } = require('./events/sse');
       broadcast('adapter_connected', { name: ac.name });
       console.log(`[Adapter] Connected: ${ac.name}`);
     } catch (err) {
@@ -43,8 +38,6 @@ async function initAdapters() {
   }
 }
 
-// 基础 API
-app.get('/api/config', (_, res) => res.json(loadConfig()));
 app.get('/health', (_, res) => {
   const { sseClients } = require('./events/sse');
   res.json({
@@ -56,17 +49,29 @@ app.get('/health', (_, res) => {
   });
 });
 
-// 路由注册
 setupSSE(app);
-setupJobsRoutes(app);
 
-// 静态文件（前端构建产物）
+const { setupConfigRoutes } = require('./routes/config');
+const { setupAgentsRoutes } = require('./routes/agents');
+const { setupJobsRoutes } = require('./routes/jobs');
+const { setupTasksRoutes } = require('./routes/tasks');
+const { setupMessagesRoutes } = require('./routes/messages');
+const { setupExcardsRoutes } = require('./routes/excards');
+const { setupWebhookRoutes } = require('./routes/webhook');
+
+setupConfigRoutes(app, activeAdapters);
+setupAgentsRoutes(app, activeAdapters);
+setupJobsRoutes(app);
+setupTasksRoutes(app, activeAdapters);
+setupMessagesRoutes(app, activeAdapters);
+setupExcardsRoutes(app);
+setupWebhookRoutes(app, activeAdapters);
+
 app.use(express.static(path.join(__dirname, '../client/dist')));
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
-// 启动
 async function start() {
   await initDb();
   await initAdapters();

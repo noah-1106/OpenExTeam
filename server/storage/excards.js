@@ -8,9 +8,13 @@ const path = require('path');
 const fs = require('fs');
 
 const EXCARDS_DIR = path.join(process.env.HOME || '/root', '.openexteam', 'excards');
+const EXCARDS_MD_DIR = path.join(process.env.HOME || '/root', '.openexteam', 'excards-md');
 
 if (!fs.existsSync(EXCARDS_DIR)) {
   fs.mkdirSync(EXCARDS_DIR, { recursive: true });
+}
+if (!fs.existsSync(EXCARDS_MD_DIR)) {
+  fs.mkdirSync(EXCARDS_MD_DIR, { recursive: true });
 }
 
 /**
