@@ -1,28 +1,84 @@
-# OpenExTeam 项目启动指南
+# OpenExTeam
 
 > 跨框架 AI Agent 团队可视化协作平台
+>
+> 在一个 Dashboard 上统一管理不同底座的 Agent，支持聊天、任务执行和多步骤工作流
 
 ---
 
-## 快速启动
+## ✨ 核心特性
+
+### 🤖 多框架 Agent 管理
+- 支持 OpenClaw、Hermes、DeerFlow 三个框架
+- 统一的 Agent 列表和状态管理
+- 实时在线/离线/忙碌状态展示
+
+### 💬 智能聊天
+- 单聊 + 群聊支持
+- Markdown 渲染
+- 流式输出
+- 系统通知会话（工作流进度实时同步）
+
+### 📋 任务看板
+- Job → Task 层级结构
+- 三列看板布局（To Do / In Progress / Done）
+- 实时状态更新（SSE 推送）
+- 任务详情面板
+
+### 🎯 ExCard 执行模板
+- Markdown 格式的完整执行模板
+- 多步骤 workflow 定义
+- 每个步骤可指定不同 Agent
+- Job 绑定 ExCard 自动执行
+
+### 🔄 多步骤工作流自动推进 🌟
+- 自动解析 ExCard workflow 步骤
+- Agent 回复完成后自动推进到下一步
+- 完整的状态跟踪和 SSE 事件推送
+- 实时同步到聊天界面系统通知
+
+### 📡 消息总线架构
+- 所有交互通过消息完成
+- 不使用 webhook 回调
+- 不干预底座内部运行
+- Adapter 只做消息格式转换
+
+---
+
+## 🚀 快速开始
+
+### 环境要求
+- Node.js 18+
+- npm 或 yarn
+
+### 安装依赖
 
 ```bash
-# 1. 进入项目目录
-cd /root/.openclaw/workspace-devteam/OpenExTeam
-
-# 2. 安装依赖并启动
 npm install
-npm run dev
 ```
 
-服务将启动：
-- **后端 API**: http://localhost:4000
-- **前端界面**: http://localhost:3000 (Vue3 开发服务器)
-- **健康检查**: http://localhost:4000/health
+### 启动开发
+
+```bash
+# 前后端同时启动
+npm run dev
+
+# 或单独启动
+npm run dev:server   # 后端 (端口 4000)
+npm run dev:client   # 前端 (端口 3000)
+```
+
+### 服务地址
+
+| 服务 | 地址 |
+|------|------|
+| 后端 API | http://localhost:4000 |
+| 前端界面 | http://localhost:3000 |
+| 健康检查 | http://localhost:4000/health |
 
 ---
 
-## 项目结构
+## 📁 项目结构
 
 ```
 openexteam/
@@ -32,155 +88,179 @@ openexteam/
 │   │   ├── views/          # 页面视图
 │   │   ├── stores/         # Pinia 状态管理
 │   │   └── api/            # API 客户端
-│   ├── prototype.html      # 交互原型参考
 │   └── package.json
 ├── server/                 # Express 后端
-│   ├── server.js           # 主入口
 │   ├── adapter/            # Agent 适配器
-│   │   └── opencode.js     # OpenCode 适配器
-│   ├── db/                 # 数据库
-│   │   └── init.sql        # 初始化数据
-│   └── package.json
-├── package.json            # 根目录 workspaces 配置
-├── SPEC.md                 # 技术规范
-├── PRD.md                  # 产品需求
-└── README.md               # 本文件
+│   │   └── openclaw.js    # OpenClaw 适配器
+│   ├── routes/             # API 路由
+│   ├── models/             # 数据模型
+│   ├── services/           # 业务服务
+│   ├── events/             # SSE 事件
+│   ├── storage/            # ExCard 存储
+│   ├── db/                # 数据库 (sql.js)
+│   └── index.js           # 主入口
+├── e2e/                   # 端到端测试
+├── package.json            # 根目录
+├── PRD-OpenExTeam.md      # 产品需求
+├── SPEC.md               # 技术规范
+├── CODE-REVIEW.md        # 代码审查报告
+└── README.md              # 本文件
 ```
 
 ---
 
-## 开发工作分配
+## 🛠️ 核心技术栈
 
-### 前前（前端 Vue3）
+### 前端
+- Vue 3 + Vite
+- Pinia (状态管理)
+- TailwindCSS
+- SSE (Server-Sent Events)
+- Marked (Markdown 渲染)
 
-**必须完成（P0）：**
-- [ ] 初始化 Vue3 + Vite + TailwindCSS 项目
-- [ ] 实现侧边栏导航（Agent列表、群聊列表）
-- [ ] 实现 Tab 切换（6个Tab）
-- [ ] 实现聊天界面（消息气泡、输入框、typing状态）
-- [ ] 实现任务看板（三列布局、任务卡片）
-- [ ] 实现任务详情面板（右侧滑出、状态切换）
-- [ ] 对接后端 API（`npm run dev` 自动代理）
-
-**参考实现：** `client/prototype.html` 中的函数
-
-**API 端点：** 见下方「API 参考」
-
-### 开开（后端/Adapter）
-
-**必须完成（P0）：**
-- [ ] 测试并完善现有 API 端点
-- [ ] 实现 OpenCode 适配器集成（真正调用 opencode CLI）
-- [ ] 实现工作流串行推进逻辑（任务完成后自动启动下一步）
-- [ ] 添加消息日志查询 API
-- [ ] 错误处理和重试机制
-
-**当前状态：** 基础框架已创建，见 `server/server.js`
-
-**适配器位置：** `server/adapter/opencode.js`
+### 后端
+- Express.js
+- sql.js (SQLite)
+- SSE (实时推送)
+- WebSocket (Agent 通信)
 
 ---
 
-## API 参考
+## 📚 核心设计原则
 
-### 消息相关
+### "消息即总线" (Message as Bus)
+
+- 所有与底座的交互都通过**消息**完成
+- 不使用复杂的系统级 API 调用
+- **不干预底座的内部运行**（底座自己管理 spawn、调度、执行）
+- Dashboard 只负责：**发消息、收消息、驱动工作流**
+
+### ExCard 设计原则
+
+- ExCard 是完整的执行模板，不拆分成多个 Task
+- Task 是可选的，用于人工跟踪，不是 ExCard 的拆分结果
+- Agent 通过消息总线回复，不是 webhook 回调
+- Job 不需要指定 Agent，Agent 在 ExCard 或 Task 中指定
+
+---
+
+## 🔧 配置说明
+
+### 配置文件位置
+
 ```bash
-POST /api/message/send
-{ agentId, content, type }
+~/.openexteam/config.json
 ```
 
-### 任务相关
-```bash
-POST /api/task/start
-{ taskId }
+### 配置格式
 
-POST /api/task/status
-{ taskId, status }
-
-GET /api/tasks?jobId=xxx
-```
-
-### 工作流相关
-```bash
-POST /api/workflow/start
-{ jobId }
-
-GET /api/workflow/status?jobId=xxx
-```
-
-### Webhook（Agent 回调）
-```bash
-POST /webhook/task-complete
-{ type, taskId, jobId, agent, result }
+```json
+{
+  "adapters": [
+    {
+      "id": "openclaw",
+      "type": "openclaw",
+      "name": "我的OpenClaw",
+      "url": "ws://127.0.0.1:9999",
+      "token": "xxx",
+      "enabled": true
+    }
+  ],
+  "theme": "light"
+}
 ```
 
 ---
 
-## 数据库
+## 📊 工作流推进逻辑
+
+### 多步骤工作流
+
+```
+1. startWorkflow(jobId)
+   ↓
+2. 解析 ExCard workflow 步骤
+   ↓
+3. 发送第 1 步给 Agent (current_step = 1)
+   ↓
+4. Agent 回复 (含 "完成"/"done"/"workflow_complete")
+   ↓
+5. handleAgentReply() 检测完成
+   ↓
+6. 检查是否有下一步 (current_step < total_steps)
+   ↓
+7a. 有下一步 → current_step + 1，发送 workflow_step_advanced 事件
+7b. 无下一步 → completeWorkflow()，标记 Job done
+```
+
+---
+
+## 🎯 API 端点一览
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/health` | GET | 健康检查 |
+| `/api/config` | GET | 获取配置 |
+| `/api/agents` | GET | 获取所有 Agent |
+| `/api/message/send` | POST | 发送消息 |
+| `/api/tasks` | GET/POST | 任务列表/创建 |
+| `/api/task/start` | POST | 启动任务 |
+| `/api/task/status` | POST | 更新任务状态 |
+| `/api/jobs` | GET/POST | Job 列表/创建 |
+| `/api/jobs/:id` | PATCH/DELETE | 更新/删除 Job |
+| `/api/workflow/start` | POST | 启动工作流 |
+| `/api/workflow/status` | GET | 工作流状态 |
+| `/api/excards` | GET/POST | ExCard 列表/创建 |
+| `/api/excards/:id` | GET/PUT/DELETE | ExCard 操作 |
+| `/api/events` | GET | SSE 事件流 |
+
+---
+
+## 📝 开发命令
 
 ```bash
-# 初始化数据
-cd server
-sqlite3 db/openexteam.db < db/init.sql
+# 安装依赖
+npm install
 
-# 查看数据
-sqlite3 db/openexteam.db "SELECT * FROM jobs;"
-sqlite3 db/openexteam.db "SELECT * FROM tasks;"
+# 开发模式
+npm run dev
+
+# 构建前端
+npm run build
+
+# 生产启动
+npm start
+
+# 运行测试
+node test-full-suite.js
 ```
 
 ---
 
-## 工作流推进逻辑
+## 📚 文档索引
 
-```
-1. 用户点击"启动工作流"
-   → POST /api/workflow/start
-   → 找到第一个 todo 任务
-   → 发送消息给对应 Agent
-
-2. Agent 完成任务后回调
-   → POST /webhook/task-complete
-   → 标记当前任务 done
-   → 自动找到下一个 todo 任务
-   → 发送消息给下一个 Agent
-
-3. 重复直到所有任务完成
-   → 标记 Job 为 done
-   → 发送完成通知给所有参与者
-```
-
----
-
-## 环境变量
-
-```bash
-# 后端 .env
-PORT=4000
-DATABASE_URL=./db/openexteam.db
-OPENCODE_API_KEY=xxx  # 如需真实调用 OpenCode
-```
-
----
-
-## 文档索引
-
-| 文件 | 说明 |
+| 文档 | 说明 |
 |------|------|
-| `SPEC.md` | 技术规范（Adapter接口、消息协议） |
 | `PRD-OpenExTeam.md` | 产品需求文档 |
-| `HANDOVER-20250415.md` | 详细工作交接文档 |
-| `client/prototype.html` | 前端交互原型（直接打开看效果） |
+| `SPEC.md` | 技术规范 |
+| `ARCHITECTURE-FRAMEWORK-BINDING.md` | 框架绑定架构 |
+| `CODE-REVIEW.md` | 代码审查报告 |
+| `REQUIREMENTS.md` | 需求与设计原则 |
 
 ---
 
-## 开发顺序建议
+## 👥 团队
 
-1. **Day 1**: 前端初始化 + 后端测试运行
-2. **Day 2**: 聊天界面 + 消息 API 对接
-3. **Day 3**: 任务看板 + 任务详情
-4. **Day 4**: 工作流启动 + 状态同步
-5. **Day 5**: 适配器集成 + 调试收尾
+- 品品 (产品)
+- 开开 (后端/Adapter)
+- 前前 (前端)
 
 ---
 
-有问题找品品对齐。
+## 📄 许可证
+
+MIT License
+
+---
+
+**有问题找品品对齐。
