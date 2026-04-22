@@ -3,10 +3,31 @@
  */
 
 const { v4: uuidv4 } = require('uuid');
-const { queryRun } = require('../models/db');
+const { queryRun, queryAll } = require('../models/db');
 const { broadcast } = require('../events/sse');
 
 function setupMessagesRoutes(app, activeAdapters) {
+  // 获取聊天历史
+  app.get('/api/messages/history', (req, res) => {
+    const { agentId, limit = 50 } = req.query;
+    let sql, params;
+
+    if (agentId) {
+      // 获取与特定 agent 的聊天历史
+      sql = `SELECT * FROM message_log
+             WHERE (from_agent = ? OR to_agent = ?)
+             ORDER BY timestamp DESC LIMIT ?`;
+      params = [agentId, agentId, parseInt(limit)];
+    } else {
+      // 获取所有消息历史
+      sql = `SELECT * FROM message_log ORDER BY timestamp DESC LIMIT ?`;
+      params = [parseInt(limit)];
+    }
+
+    const messages = queryAll(sql, params).reverse(); // 反转按时间正序
+    res.json({ messages });
+  });
+
   app.post('/api/message/send', async (req, res) => {
     const { agentId, message, type, content } = req.body;
 

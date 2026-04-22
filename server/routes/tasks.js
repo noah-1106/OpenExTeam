@@ -15,10 +15,10 @@ function setupTasksRoutes(app, activeAdapters) {
 
   app.post('/api/tasks', (req, res) => {
     const { id, jobId, title, description, agent } = req.body;
-    if (!jobId || !title || !agent) {
-      return res.status(400).json({ error: 'jobId, title, agent required' });
+    if (!jobId || !title) {
+      return res.status(400).json({ error: 'jobId, title required' });
     }
-    const result = createTask({ id, jobId, title, description, agent });
+    const result = createTask({ id, jobId, title, description, agent: agent || null });
     res.json({ success: true, id: result.id });
   });
 

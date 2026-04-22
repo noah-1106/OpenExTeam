@@ -15,6 +15,7 @@ export const useChatStore = defineStore('chat', () => {
   const sessions = ref([]);
   const activeSessionId = ref(null);
   const agents = ref([]); // 当前 agents 列表（从 BoardStore 同步）
+  const loadedHistories = ref(new Set()); // 已加载历史的会话
 
   // 跟踪流式消息：key = messageId, value = { sessionId, messageIndex }
   const streamingMessages = ref(new Map());
@@ -277,9 +278,46 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // 加载会话历史消息
+  async function loadSessionHistory(sessionId) {
+    if (loadedHistories.value.has(sessionId)) {
+      console.log('[Chat] History already loaded for:', sessionId);
+      return;
+    }
+
+    const sess = sessions.value.find(s => s.id === sessionId);
+    if (!sess) return;
+
+    if (sess.type === 'p2p') {
+      try {
+        console.log('[Chat] Loading history for agent:', sess.agentId);
+        const data = await api.getMessageHistory(sess.agentId);
+        if (data.messages && data.messages.length > 0) {
+          // 转换历史消息格式
+          const historyMessages = data.messages.map(msg => {
+            const content = msg.content ? (typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)) : '';
+            return {
+              sender: msg.from_agent === 'dashboard' ? 'user' : (msg.from_agent || 'system'),
+              text: content,
+              time: new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+              isHistory: true
+            };
+          });
+          // 历史消息插入到前面
+          sess.messages = [...historyMessages, ...sess.messages];
+          loadedHistories.value.add(sessionId);
+          console.log('[Chat] Loaded', historyMessages.length, 'history messages');
+        }
+      } catch (err) {
+        console.error('[Chat] Failed to load history:', err);
+      }
+    }
+  }
+
   // 切换会话
   function selectSession(id) {
     activeSessionId.value = id;
+    loadSessionHistory(id);
   }
 
   // 当前活跃会话
@@ -306,6 +344,7 @@ export const useChatStore = defineStore('chat', () => {
     sessions,
     activeSessionId,
     agents,
+    loadedHistories,
     connectSSE,
     initSessions,
     sendMessage,
@@ -313,5 +352,6 @@ export const useChatStore = defineStore('chat', () => {
     activeSession,
     addGroupSession,
     ensureSystemSession,
+    loadSessionHistory,
   };
 });

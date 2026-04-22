@@ -6,5 +6,19 @@ server.log
 *.db
 config.json
 server/config.json
+
+# 配置和文档
+CLAUDE.md
+SPEC.md
+PRD-OpenExTeam.md
+REQUIREMENTS.md
+HANDOVER-*.md
+ARCHITECTURE-*.md
+API-RESEARCH.md
 .pi-debug-brief.md
+docs/
+
+# 凭证目录
+.openexteam/
+.openclaw/
 

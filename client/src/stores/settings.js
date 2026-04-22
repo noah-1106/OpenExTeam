@@ -38,18 +38,20 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 保存适配器配置
   async function saveAdapter(config) {
-    // 先调用 test
-    const result = await testAdapter(config);
-    if (result.pairing_required) {
-      throw new Error(`请先完成设备配对: ${result.message}`);
+    // 先调用 test（可选，不阻止保存）
+    try {
+      await testAdapter(config);
+    } catch (e) {
+      // 测试失败不阻止保存
+      console.log('[Settings] Test failed but proceeding to save:', e.message);
     }
-    if (!result.success) throw new Error('连接测试失败');
 
     // 保存到配置
+    const newConfig = { ...config, enabled: true };
     const res = await fetch(`${API_BASE}/api/config/adapters`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adapters: [...adapters.value, config] }),
+      body: JSON.stringify({ adapters: [...adapters.value, newConfig] }),
     });
     if (!res.ok) throw new Error('保存失败');
     await fetchAdapters(); // 重新加载
@@ -59,7 +61,7 @@ export const useSettingsStore = defineStore('settings', () => {
   // 删除适配器
   async function deleteAdapter(conn) {
     // 根据 id 或 name 过滤
-    const filtered = adapters.value.filter(a => 
+    const filtered = adapters.value.filter(a =>
       (conn.id && a.id !== conn.id) || (conn.name && a.name !== conn.name)
     );
     const res = await fetch(`${API_BASE}/api/config/adapters`, {
@@ -71,5 +73,19 @@ export const useSettingsStore = defineStore('settings', () => {
     await fetchAdapters();
   }
 
-  return { adapters, fetchAdapters, testAdapter, saveAdapter, deleteAdapter };
+  // 重置适配器凭证
+  async function resetCredentials(type) {
+    const res = await fetch(`${API_BASE}/api/adapter/reset-credentials`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ message: '重置失败' }));
+      throw new Error(data.message || '重置失败');
+    }
+    return await res.json();
+  }
+
+  return { adapters, fetchAdapters, testAdapter, saveAdapter, deleteAdapter, resetCredentials };
 });

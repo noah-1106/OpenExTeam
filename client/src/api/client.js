@@ -57,6 +57,8 @@ const api = {
   // --- Messages ---
   sendMessage: (agentId, content, type = 'chat', agentName) =>
     request('POST', '/api/message/send', { agentId, content, type, agentName }),
+  getMessageHistory: (agentId, limit = 50) =>
+    request('GET', `/api/messages/history?agentId=${encodeURIComponent(agentId)}&limit=${limit}`),
 };
 
 export default api;

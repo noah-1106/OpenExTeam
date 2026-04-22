@@ -4,11 +4,13 @@
  */
 
 const OpenClawAdapter = require('./openclaw');
+const HermesAdapter = require('./hermes');
+const DeerFlowAdapter = require('./deerflow');
 
 const adapters = {
-  openclaw: OpenClawAdapter
-  // DeerFlow: require('./deerflow'),
-  // Hermes: require('./hermes'),
+  openclaw: OpenClawAdapter,
+  hermes: HermesAdapter,
+  deerflow: DeerFlowAdapter
 };
 
 /**

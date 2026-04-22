@@ -70,15 +70,21 @@ function deleteCurrentJob() {
 // ==================== 添加 Task ====================
 const showAddTask = ref(false)
 const newTaskTitle = ref('')
+const newTaskAgent = ref('')
 
 function openAddTask() {
   newTaskTitle.value = ''
+  newTaskAgent.value = selectedJob.value?.agent || ''
   showAddTask.value = true
 }
 
 function addTaskToJob() {
   if (!newTaskTitle.value.trim() || !selectedJob.value) return
-  emit('add-task', { jobId: selectedJob.value.id, title: newTaskTitle.value.trim() })
+  emit('add-task', {
+    jobId: selectedJob.value.id,
+    title: newTaskTitle.value.trim(),
+    agent: newTaskAgent.value || null
+  })
   showAddTask.value = false
 }
 
@@ -379,10 +385,19 @@ const agentAvatars = { '品品': '👩‍💼', '开开': '👨‍💻', '前前
 
         <!-- 添加任务输入 -->
         <div v-if="showAddTask" class="px-5 pb-4 border-t border-border-subtle flex-shrink-0">
-          <div class="flex gap-2 mt-3">
-            <input v-model="newTaskTitle" @keydown.enter="addTaskToJob" type="text" placeholder="输入任务名称" class="flex-1 px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface" />
-            <button @click="addTaskToJob" class="px-4 py-2 bg-accent text-white rounded-lg text-sm hover:bg-accent-hover">添加</button>
-            <button @click="showAddTask = false" class="px-3 py-2 text-sm text-secondary hover:text-primary">取消</button>
+          <div class="mt-3 space-y-3">
+            <input v-model="newTaskTitle" @keydown.enter="addTaskToJob" type="text" placeholder="输入任务名称" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface" />
+            <div>
+              <label class="block text-xs font-medium text-primary mb-1">指定 Agent (可选)</label>
+              <select v-model="newTaskAgent" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface">
+                <option value="">不指定 (继承工作的 Agent 或稍后指定)</option>
+                <option v-for="a in agents" :key="a.id" :value="a.name">{{ a.name }}</option>
+              </select>
+            </div>
+            <div class="flex gap-2">
+              <button @click="addTaskToJob" class="px-4 py-2 bg-accent text-white rounded-lg text-sm hover:bg-accent-hover">添加</button>
+              <button @click="showAddTask = false" class="px-3 py-2 text-sm text-secondary hover:text-primary">取消</button>
+            </div>
           </div>
         </div>
       </div>
