@@ -65,7 +65,7 @@ npm run dev
 
 # 或单独启动
 npm run dev:server   # 后端 (端口 4000)
-npm run dev:client   # 前端 (端口 3000)
+npm run dev:client   # 前端 (端口 3001，端口被占用时自动递增)
 ```
 
 ### 服务地址
@@ -73,7 +73,7 @@ npm run dev:client   # 前端 (端口 3000)
 | 服务 | 地址 |
 |------|------|
 | 后端 API | http://localhost:4000 |
-| 前端界面 | http://localhost:3000 |
+| 前端界面 | http://localhost:3001 |
 | 健康检查 | http://localhost:4000/health |
 
 ---
