@@ -4,6 +4,7 @@
 
 const { loadConfig, saveConfig } = require('../config');
 const { createAdapter } = require('../adapter');
+const { validators, validateAdapterConfig } = require('../validation');
 const fs = require('fs');
 const path = require('path');
 
@@ -16,8 +17,22 @@ function setupConfigRoutes(app, activeAdapters, adapterConfigs, helpers) {
   });
 
   app.post('/api/config/adapters', (req, res) => {
+    const adapters = req.body.adapters || [];
+
+    // 验证每个适配器配置
+    for (const adapter of adapters) {
+      const validation = validateAdapterConfig(adapter);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid adapter configuration',
+          details: validation.errors
+        });
+      }
+    }
+
     const cfg = loadConfig();
-    cfg.adapters = req.body.adapters || [];
+    cfg.adapters = adapters;
     saveConfig(cfg);
 
     // 更新内存中的配置

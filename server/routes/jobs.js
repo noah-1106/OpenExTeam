@@ -9,6 +9,7 @@
 
 const { getAllJobs, createJob, updateJob, deleteJob } = require('../models/job');
 const { getExcard, getExcardMd } = require('../storage/excards');
+const { validators, validateJobCreate, validateJobUpdate } = require('../validation');
 
 function setupJobsRoutes(app) {
   app.get('/api/jobs', (_, res) => {
@@ -16,10 +17,17 @@ function setupJobsRoutes(app) {
   });
 
   app.post('/api/jobs', (req, res) => {
-    const { id, title, description, type, excardId, excard, agent } = req.body;
-    if (!title) {
-      return res.status(400).json({ error: 'title required' });
+    // 输入验证
+    const validation = validateJobCreate(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request',
+        details: validation.errors
+      });
     }
+
+    const { id, title, description, type, excardId, excard, agent } = req.body;
     // 支持 excardId 和 excard 两种字段名
     const useExcardId = excardId || excard;
     const result = createJob({
@@ -74,6 +82,16 @@ function setupJobsRoutes(app) {
   });
 
   app.patch('/api/jobs/:id', (req, res) => {
+    // 输入验证
+    const validation = validateJobUpdate(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request',
+        details: validation.errors
+      });
+    }
+
     const job = updateJob(req.params.id, req.body);
     if (!job) {
       return res.status(404).json({ error: 'Job not found' });

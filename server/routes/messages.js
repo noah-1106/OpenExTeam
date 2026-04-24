@@ -5,6 +5,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { queryRun, queryAll } = require('../models/db');
 const { broadcast } = require('../events/sse');
+const { validators, validateMessageSend } = require('../validation');
 
 function setupMessagesRoutes(app, activeAdapters) {
   // 获取聊天历史
@@ -29,6 +30,16 @@ function setupMessagesRoutes(app, activeAdapters) {
   });
 
   app.post('/api/message/send', async (req, res) => {
+    // 输入验证
+    const validation = validateMessageSend({ ...req.body, content: req.body.content || req.body.message });
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request',
+        details: validation.errors
+      });
+    }
+
     const { agentId, message, type, content } = req.body;
 
     let adapterName, gatewayAgentId;

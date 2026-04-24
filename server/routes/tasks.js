@@ -6,6 +6,7 @@ const { getTasks, createTask, updateTaskStatus, deleteTask } = require('../model
 const { v4: uuidv4 } = require('uuid');
 const { queryRun, queryGet } = require('../models/db');
 const { broadcast } = require('../events/sse');
+const { validators, validateTaskCreate } = require('../validation');
 
 function setupTasksRoutes(app, activeAdapters) {
   app.get('/api/tasks', (req, res) => {
@@ -14,10 +15,17 @@ function setupTasksRoutes(app, activeAdapters) {
   });
 
   app.post('/api/tasks', (req, res) => {
-    const { id, jobId, title, description, agent } = req.body;
-    if (!jobId || !title) {
-      return res.status(400).json({ error: 'jobId, title required' });
+    // 输入验证
+    const validation = validateTaskCreate(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request',
+        details: validation.errors
+      });
     }
+
+    const { id, jobId, title, description, agent } = req.body;
     const result = createTask({ id, jobId, title, description, agent: agent || null });
     res.json({ success: true, id: result.id });
   });
