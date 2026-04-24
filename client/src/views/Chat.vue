@@ -1,16 +1,80 @@
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { useChatStore } from '../stores/chat'
 import { marked } from 'marked'
+import { useBoardStore } from '../stores/board'
+import ExcardProposalModal from '../components/ExcardProposalModal.vue'
+import SlashCommandHelper from '../components/SlashCommandHelper.vue'
 
 const props = defineProps({
   agents: { type: Array, required: true },
 })
 
 const chatStore = useChatStore()
+const boardStore = useBoardStore()
 const typing = ref(false)
 const inputText = ref('')
 const chatContainer = ref(null)
+
+// ExCard 提议相关
+const showProposalModal = ref(false)
+const proposalAgentId = ref('')
+const proposalText = ref('')
+
+// 检测消息中是否有 ExCard 提议
+function checkForExcardProposal(msg) {
+  if (msg.sender === 'user') return false
+  const text = msg.text || ''
+  if (text.includes('[EXCARD_PROPOSAL]') || text.includes('# EXCARD_PROPOSAL')) {
+    return true
+  }
+  return false
+}
+
+// 显示提议弹窗
+function showProposal(msg) {
+  if (activeSession.value?.type === 'p2p') {
+    proposalAgentId.value = activeSession.value.agentId
+  } else if (msg.agentId) {
+    proposalAgentId.value = msg.agentId
+  }
+  proposalText.value = msg.text
+  showProposalModal.value = true
+}
+
+// 创建 ExCard
+async function handleCreateExcard(data) {
+  try {
+    // 先创建 ExCard
+    await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/excards`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        agent: data.agent,
+      }),
+    })
+
+    // 再更新 Markdown 内容
+    await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/excards/${data.id}/md`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        markdown: data.markdown,
+      }),
+    })
+
+    // 刷新 ExCard 列表
+    await boardStore.fetchAll()
+
+    alert('ExCard 创建成功！')
+  } catch (err) {
+    console.error('创建 ExCard 失败:', err)
+    alert('创建 ExCard 失败：' + err.message)
+  }
+}
 
 // 直接引用 store 中的状态（模板中使用 chatStore.xxx）
 const activeSession = computed(() => chatStore.activeSession())
@@ -62,12 +126,36 @@ function handleKeydown(e) {
 }
 
 async function sendMessage() {
-  const text = inputText.value.trim()
+  let text = inputText.value.trim()
   if (!text) return
   inputText.value = ''
   typing.value = true
+
   try {
-    await chatStore.sendMessage(text)
+    // 检测斜杠命令，给 agent 明确的回复格式要求
+    let messageToSend = text
+    if (text.startsWith('/ec')) {
+      // 提取用户需求，给 agent 明确的格式指令
+      const userDemand = text.replace(/^\/ec\s*/, '').trim()
+      messageToSend = `/ec ${userDemand}
+
+请务必用以下格式回复提案：
+# EXCARD_PROPOSAL
+
+（在这里写完整的 ExCard Markdown 内容）
+
+或者使用：
+[EXCARD_PROPOSAL]
+name: ExCard名称
+description: 描述用途
+agent: <agent-id>
+markdown:
+# ExCard标题
+## 任务描述
+...`
+    }
+
+    await chatStore.sendMessage(messageToSend)
   } finally {
     typing.value = false
   }
@@ -81,6 +169,16 @@ function scrollToBottom() {
     }
   })
 }
+
+// 监听消息变化，检测 ExCard 提议
+watch(() => activeSession.value?.messages, (newMessages) => {
+  if (newMessages && newMessages.length > 0) {
+    const lastMsg = newMessages[newMessages.length - 1]
+    if (checkForExcardProposal(lastMsg)) {
+      showProposal(lastMsg)
+    }
+  }
+}, { deep: true })
 
 function getLastMessage(sess) {
   if (!sess.messages.length) return ''
@@ -172,8 +270,8 @@ function getStatusColor(agent) {
             </div>
           </div>
         </div>
-        <!-- 群聊 -->
-        <div class="px-3">
+        <!-- 群聊（暂时隐藏） -->
+        <!-- <div class="px-3">
           <div class="text-xs font-semibold text-muted uppercase tracking-wide px-2 py-1">群聊</div>
           <div
             v-for="sess in chatStore.sessions.filter(s => s.type === 'group')"
@@ -198,7 +296,7 @@ function getStatusColor(agent) {
               <p class="text-xs text-secondary truncate mt-0.5">{{ getLastMessage(sess) }}</p>
             </div>
           </div>
-        </div>
+        </div> -->
       </div>
     </div>
 
@@ -226,12 +324,12 @@ function getStatusColor(agent) {
             {{ activeSession?.type === 'system' ? '系统工作流通知' : (activeSession?.type === 'group' ? `${activeSession?.agentIds?.length || 0} 位成员` : '私聊') }}
           </div>
         </div>
-        <button
+        <!-- <button
           v-if="activeSession?.type === 'group'"
           class="px-3 py-1.5 text-xs text-secondary border border-border rounded-lg hover:bg-surface-raised"
         >
           群设置
-        </button>
+        </button> -->
       </div>
 
       <!-- 消息列表 -->
@@ -316,14 +414,19 @@ function getStatusColor(agent) {
           ℹ️ 系统通知会话仅用于接收工作流进度更新
         </div>
         <div v-else-if="isSessionConnected" class="flex items-end gap-3">
-          <textarea
-            v-model="inputText"
-            @keydown="handleKeydown"
-            rows="1"
-            placeholder="输入消息，按 Enter 发送..."
-            class="flex-1 px-4 py-2.5 bg-surface-raised border border-border rounded-full text-sm resize-none outline-none focus:ring-2 focus:ring-accent focus:border-transparent leading-relaxed"
-            style="min-height: 42px; max-height: 120px"
-          />
+          <div class="flex-1 relative">
+            <textarea
+              v-model="inputText"
+              @keydown="handleKeydown"
+              rows="1"
+              placeholder="输入消息，按 Enter 发送..."
+              class="w-full px-4 py-2.5 bg-surface-raised border border-border rounded-full text-sm resize-none outline-none focus:ring-2 focus:ring-accent focus:border-transparent leading-relaxed"
+              style="min-height: 42px; max-height: 120px"
+            />
+            <div v-if="inputText.trim() === ''" class="absolute left-4 bottom-2.5 text-xs text-muted pointer-events-none">
+              <span class="mr-3 text-accent font-medium">/ec</span> 让 Agent 帮忙创建 ExCard
+            </div>
+          </div>
           <button
             @click="sendMessage"
             class="w-10 h-10 rounded-full bg-accent text-white flex items-center justify-center hover:bg-accent-hover transition-all duration-150 flex-shrink-0 shadow-xs"
@@ -338,5 +441,14 @@ function getStatusColor(agent) {
         </div>
       </div>
     </div>
+
+    <!-- ExCard 提议弹窗 -->
+    <ExcardProposalModal
+      :show="showProposalModal"
+      :agent-id="proposalAgentId"
+      :raw-text="proposalText"
+      @close="showProposalModal = false"
+      @create="handleCreateExcard"
+    />
   </div>
 </template>

@@ -87,5 +87,33 @@ export const useSettingsStore = defineStore('settings', () => {
     return await res.json();
   }
 
-  return { adapters, fetchAdapters, testAdapter, saveAdapter, deleteAdapter, resetCredentials };
+  // 手动连接适配器
+  async function connectAdapter(name) {
+    const res = await fetch(`${API_BASE}/api/adapter/${name}/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ message: '连接失败' }));
+      throw new Error(data.message || '连接失败');
+    }
+    await fetchAdapters();
+    return await res.json();
+  }
+
+  // 手动断开适配器
+  async function disconnectAdapter(name) {
+    const res = await fetch(`${API_BASE}/api/adapter/${name}/disconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ message: '断开失败' }));
+      throw new Error(data.message || '断开失败');
+    }
+    await fetchAdapters();
+    return await res.json();
+  }
+
+  return { adapters, fetchAdapters, testAdapter, saveAdapter, deleteAdapter, resetCredentials, connectAdapter, disconnectAdapter };
 });

@@ -3,7 +3,7 @@
  * 根据配置动态加载对应框架的 Adapter
  */
 
-const OpenClawAdapter = require('./openclaw');
+const OpenClawAdapter = require('./openclaw/index');
 const HermesAdapter = require('./hermes');
 const DeerFlowAdapter = require('./deerflow');
 

@@ -52,6 +52,9 @@ function setupExcardsRoutes(app) {
       if (!req.body.id || !req.body.name) {
         return res.status(400).json({ error: 'id and name required' });
       }
+      if (!req.body.agent) {
+        return res.status(400).json({ error: 'agent is required - ExCard must bind to exactly one agent' });
+      }
       const ec = createExcard(req.body);
       broadcast('excard_created', { id: ec.id, name: ec.name });
       res.json({ success: true, excard: ec });
@@ -62,6 +65,9 @@ function setupExcardsRoutes(app) {
 
   app.put('/api/excards/:id', (req, res) => {
     try {
+      if (req.body.agent !== undefined && !req.body.agent) {
+        return res.status(400).json({ error: 'agent is required - ExCard must bind to exactly one agent' });
+      }
       const ec = updateExcard(req.params.id, req.body);
       broadcast('excard_updated', { id: ec.id, name: ec.name });
       res.json({ success: true, excard: ec });

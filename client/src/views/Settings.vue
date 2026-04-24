@@ -136,6 +136,9 @@ async function saveConnection() {
   }
 }
 
+const connecting = ref({});
+const disconnecting = ref({});
+
 async function deleteConnection(conn) {
   if (!confirm('确定删除此连接？')) return;
   try {
@@ -155,6 +158,30 @@ async function resetCredentials(type) {
     alert('重置失败：' + err.message);
   } finally {
     resetting.value = false;
+  }
+}
+
+async function handleConnect(conn) {
+  connecting.value[conn.name] = true;
+  try {
+    await settingsStore.connectAdapter(conn.name);
+    fetchConnectedAdapters();
+  } catch (err) {
+    alert('连接失败：' + err.message);
+  } finally {
+    connecting.value[conn.name] = false;
+  }
+}
+
+async function handleDisconnect(conn) {
+  disconnecting.value[conn.name] = true;
+  try {
+    await settingsStore.disconnectAdapter(conn.name);
+    fetchConnectedAdapters();
+  } catch (err) {
+    alert('断开失败：' + err.message);
+  } finally {
+    disconnecting.value[conn.name] = false;
   }
 }
 </script>
@@ -209,6 +236,22 @@ async function resetCredentials(type) {
               </p>
             </div>
             <div class="flex items-center gap-2">
+              <button
+                v-if="!isAdapterConnected(conn)"
+                @click="handleConnect(conn)"
+                :disabled="connecting[conn.name]"
+                class="px-3 py-1.5 text-sm text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {{ connecting[conn.name] ? '连接中...' : '连接' }}
+              </button>
+              <button
+                v-else
+                @click="handleDisconnect(conn)"
+                :disabled="disconnecting[conn.name]"
+                class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {{ disconnecting[conn.name] ? '断开中...' : '断开' }}
+              </button>
               <button
                 v-if="conn.type === 'openclaw' || conn.id === 'openclaw'"
                 @click="resetCredentials('openclaw')"
@@ -357,7 +400,8 @@ async function resetCredentials(type) {
               <span v-else-if="testResult === 'pairing_required'">
                 ⏳ 需要设备配对
                 <br />
-                <strong>Device ID:</strong> <code class="bg-yellow-100 px-1 rounded">{{ formData.pairingDeviceId }}</code>
+                <strong>配对命令：</strong>
+                <code class="bg-yellow-100 px-1 rounded select-all">{{ formData.pairingMessage || `openclaw devices approve ${formData.pairingDeviceId}` }}</code>
                 <br />
                 <span class="text-xs">你可以直接保存配置，后端会持续尝试连接</span>
               </span>

@@ -1,6 +1,6 @@
 <script setup>
-import { ref } from 'vue'
-import TaskCard from '../components/TaskCard.vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
+import api from '../api/client.js'
 
 const props = defineProps({
   jobs: { type: Array, required: true },
@@ -10,332 +10,315 @@ const props = defineProps({
 
 const emit = defineEmits(['update-task', 'create-task', 'start-job'])
 
-const showCreateModal = ref(false)
-const newTask = ref({ title: '', description: '', agent: '', priority: 'medium', jobId: '' })
-const showDetail = ref(false)
-const selectedTask = ref(null)
+const jobSteps = ref({}) // jobId -> steps array
+const selectedJobId = ref(null)
 
-function tasksForJob(jobId) { return props.tasks.filter(t => t.jobId === jobId) }
-function tasksByStatus(jobId, status) { return tasksForJob(jobId).filter(t => t.status === status) }
-function jobProgress(jobId) {
-  const all = tasksForJob(jobId)
-  if (!all.length) return 0
-  return Math.round((all.filter(t => t.status === 'done').length / all.length) * 100)
-}
-function jobDoneCount(jobId) { return tasksForJob(jobId).filter(t => t.status === 'done').length }
-function jobTotalCount(jobId) { return tasksForJob(jobId).length }
+const SSE_URL = window.location.origin.replace(/:\d+$/, ':4000') + '/api/events'
+let es = null
 
-const columns = [
-  { id: 'todo', label: 'To Do', color: 'bg-surface-raised' },
-  { id: 'in-progress', label: 'In Progress', color: 'bg-accent' },
-  { id: 'done', label: 'Done', color: 'bg-green-400' },
-]
+const activeJobs = computed(() => {
+  return props.jobs.filter(job => job.status === 'in-progress')
+})
 
-function openCreateModal() {
-  newTask.value = {
-    title: '', description: '', agent: props.agents[0]?.name || '',
-    priority: 'medium', jobId: props.jobs[0]?.id || '',
-  }
-  showCreateModal.value = true
-}
-function createTask() {
-  if (!newTask.value.title.trim() || !newTask.value.jobId) return
-  emit('create-task', { ...newTask.value, status: 'todo' })
-  showCreateModal.value = false
-}
-function openTaskDetail(task) { selectedTask.value = task; showDetail.value = true }
-function closeDetail() { showDetail.value = false; selectedTask.value = null }
-function changeStatus(status) {
-  if (selectedTask.value) {
-    emit('update-task', selectedTask.value.id, status)
-    selectedTask.value = { ...selectedTask.value, status }
+const otherJobs = computed(() => {
+  return props.jobs.filter(job => job.status !== 'in-progress')
+})
+
+async function loadJobSteps(jobId) {
+  try {
+    const data = await api.getJobSteps(jobId)
+    jobSteps.value[jobId] = data.steps || []
+  } catch (e) {
+    console.error('Failed to load job steps:', e)
+    jobSteps.value[jobId] = []
   }
 }
-function startTask() {
-  if (!selectedTask.value) return
-  emit('update-task', selectedTask.value.id, 'in-progress')
-  selectedTask.value = { ...selectedTask.value, status: 'in-progress' }
+
+function getStepsForJob(jobId) {
+  return jobSteps.value[jobId] || []
 }
+
+function getTodoSteps(jobId) {
+  return getStepsForJob(jobId).filter(s => s.status === 'pending' || s.status === 'todo')
+}
+
+function getInProgressSteps(jobId) {
+  return getStepsForJob(jobId).filter(s => s.status === 'in-progress')
+}
+
+function getDoneSteps(jobId) {
+  return getStepsForJob(jobId).filter(s => s.status === 'completed' || s.status === 'done')
+}
+
+function getAgentName(agentId) {
+  if (!agentId) return ''
+  const agent = props.agents.find(a => a.id === agentId)
+  if (!agent) return agentId
+  return agent.name
+}
+
 function startWorkflow(jobId) {
   emit('start-job', jobId)
+  setTimeout(() => loadJobSteps(jobId), 500)
 }
-function getTaskStepIndex(task) { return tasksForJob(task.jobId).findIndex(t => t.id === task.id) + 1 }
-function getJobTitle(task) { return props.jobs.find(j => j.id === task.jobId)?.title || '' }
 
-const agentAvatars = { '品品': '👩‍💼', '开开': '👨‍💻', '前前': '👨‍🎨', '维维': '👨‍🔧', '测测': '🧪' }
-const statusOptions = [
-  { value: 'todo', label: '待处理' },
-  { value: 'in-progress', label: '进行中' },
-  { value: 'done', label: '已完成' },
-]
+function statusLabel(status) {
+  switch (status) {
+    case 'pending': return '等待中'
+    case 'in-progress': return '进行中'
+    case 'completed': return '已完成'
+    case 'error': return '错误'
+    default: return status
+  }
+}
+
+function getStepTypeLabel(type) {
+  return type === 'excard' ? 'ExCard' : '任务'
+}
+
+function selectJob(jobId) {
+  if (selectedJobId.value === jobId) {
+    selectedJobId.value = null
+  } else {
+    selectedJobId.value = jobId
+    if (!jobSteps.value[jobId]) {
+      loadJobSteps(jobId)
+    }
+  }
+}
+
+// SSE event handling for real-time updates
+function connectSSE() {
+  if (es) es.close()
+  es = new EventSource(SSE_URL)
+
+  es.addEventListener('workflow_started', (e) => {
+    const d = JSON.parse(e.data)
+    console.log('[Board] Workflow started:', d)
+    setTimeout(() => loadJobSteps(d.jobId), 100)
+  })
+
+  es.addEventListener('workflow_step_advanced', (e) => {
+    const d = JSON.parse(e.data)
+    console.log('[Board] Workflow step advanced:', d)
+    setTimeout(() => loadJobSteps(d.jobId), 100)
+  })
+
+  es.addEventListener('workflow_completed', (e) => {
+    const d = JSON.parse(e.data)
+    console.log('[Board] Workflow completed:', d)
+    setTimeout(() => loadJobSteps(d.jobId), 100)
+  })
+
+  es.addEventListener('workflow_error', (e) => {
+    const d = JSON.parse(e.data)
+    console.log('[Board] Workflow error:', d)
+    setTimeout(() => loadJobSteps(d.jobId), 100)
+  })
+}
+
+onMounted(() => {
+  connectSSE()
+  activeJobs.value.forEach(job => {
+    loadJobSteps(job.id)
+  })
+})
+
+onUnmounted(() => {
+  if (es) {
+    es.close()
+    es = null
+  }
+})
+
+// Watch for changes to active jobs and load steps
+watch(activeJobs, (newJobs) => {
+  newJobs.forEach(job => {
+    if (!jobSteps.value[job.id]) {
+      loadJobSteps(job.id)
+    }
+  })
+}, { deep: true })
 </script>
 
 <template>
   <div class="h-full flex flex-col">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-5">
+    <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-xl font-bold text-primary">任务看板</h2>
-        <p class="text-sm text-secondary mt-0.5">{{ jobs.length }} 个工作 · {{ tasks.length }} 个任务</p>
+        <h2 class="text-xl font-bold text-primary">看板</h2>
+        <p class="text-sm text-secondary mt-0.5">
+          {{ activeJobs.length }} 个工作正在执行
+        </p>
       </div>
     </div>
 
-    <!-- Job Cards -->
-    <div class="flex-1 overflow-y-auto space-y-5">
-      <div v-for="job in jobs" :key="job.id"
-        class="bg-surface rounded-xl border border-border-subtle shadow-xs overflow-hidden hover:shadow-sm transition-shadow duration-200 animate-fade-in">
+    <div class="flex-1 overflow-y-auto">
+      <!-- 如果有正在执行的工作，先显示工作选择器 -->
+      <div v-if="activeJobs.length > 0" class="mb-6">
+        <h3 class="text-sm font-semibold text-secondary mb-3">正在执行的工作</h3>
+        <div class="flex flex-wrap gap-2">
+          <button v-for="job in activeJobs" :key="job.id"
+                  @click="selectJob(job.id)"
+                  :class="['px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border',
+                          selectedJobId === job.id
+                            ? 'bg-accent text-white border-accent shadow-sm'
+                            : 'bg-surface text-secondary border-border-subtle hover:border-border']">
+            {{ job.title }}
+          </button>
+        </div>
+      </div>
 
-        <!-- Job Header -->
-        <div class="px-5 py-3.5 border-b border-border-subtle flex items-center justify-between gap-4">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-0.5 flex-wrap">
-              <span class="font-semibold text-primary">{{ job.title }}</span>
-              <span v-if="job.type === 'recurring' && job.schedule"
-                class="text-xs px-2 py-0.5 rounded-md bg-accent-dim text-accent font-semibold">
-                🔄 每天 {{ job.schedule.time }}
-              </span>
-              <span v-else class="text-xs px-2 py-0.5 rounded-md bg-surface text-secondary font-medium">
-                ⚡ 一次性
-              </span>
-              <span v-if="job.excard"
-                class="text-xs px-2 py-0.5 rounded-md bg-accent-dim text-accent font-medium">
-                {{ job.excard }}
-              </span>
-              <span :class="[
-                'text-xs px-2 py-0.5 rounded-md font-medium',
-                job.status === 'done' ? 'bg-surface-raised text-orange-600' :
-                job.status === 'in-progress' ? 'bg-accent-dim text-accent' :
-                'bg-surface text-secondary'
-              ]">
-                {{ job.status === 'done' ? '已完成' : job.status === 'in-progress' ? '进行中' : '未开始' }}
-              </span>
-            </div>
-            <p class="text-xs text-muted truncate">{{ job.description }}</p>
-          </div>
-
-          <div class="flex items-center gap-4 flex-shrink-0">
-            <button v-if="tasksForJob(job.id).length > 0"
-              @click="startWorkflow(job.id)"
-              class="px-3 py-1.5 bg-green-400 text-white rounded-lg text-xs font-semibold hover:bg-emerald-500 transition-all duration-150 shadow-xs">
-              ▶ 启动工作流
-            </button>
-            <div class="text-right">
-              <div class="text-sm font-bold text-primary">{{ jobDoneCount(job.id) }}/{{ jobTotalCount(job.id) }}</div>
-              <div class="flex items-center gap-2 mt-1">
-                <div class="w-16 h-1.5 bg-surface rounded-full overflow-hidden">
-                  <div class="h-full rounded-full transition-all duration-300"
-                    :class="job.status === 'done' ? 'bg-green-400' : job.status === 'in-progress' ? 'bg-accent' : 'bg-surface-raised'"
-                    :style="{ width: jobProgress(job.id) + '%' }" />
-                </div>
-                <span class="text-xs text-muted">{{ jobProgress(job.id) }}%</span>
-              </div>
-            </div>
+      <!-- 看板内容区域 -->
+      <div v-if="selectedJobId" class="bg-surface rounded-xl border border-border-subtle shadow-xs overflow-hidden">
+        <!-- 工作标题栏 -->
+        <div class="px-5 py-4 border-b border-border-subtle flex items-center justify-between bg-accent/5">
+          <div>
+            <h3 class="font-semibold text-primary">
+              {{ (props.jobs.find(j => j.id === selectedJobId))?.title || '工作' }}
+            </h3>
+            <p class="text-xs text-muted mt-1">
+              {{ getStepsForJob(selectedJobId).length }} 个步骤
+            </p>
           </div>
         </div>
 
-        <!-- Task Columns -->
-        <div class="grid grid-cols-3">
-          <div v-for="(col, ci) in columns" :key="col.id"
-            :class="ci < 2 ? 'border-r border-border-subtle' : ''"
-            class="p-3">
-            <!-- Column Header -->
-            <div class="flex items-center gap-2 mb-3">
-              <span :class="['w-2 h-2 rounded-full flex-shrink-0', col.color]" />
-              <span class="text-xs font-semibold text-secondary uppercase tracking-wide">{{ col.label }}</span>
-              <span class="ml-auto text-xs text-muted">{{ tasksByStatus(job.id, col.id).length }}</span>
+        <!-- 看板三列布局 -->
+        <div class="grid grid-cols-3 gap-0">
+          <!-- Todo 列 -->
+          <div class="border-r border-border-subtle p-4 bg-gray-50/30">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+              <span class="text-sm font-semibold text-secondary">待执行</span>
+              <span class="text-xs text-muted ml-auto">{{ getTodoSteps(selectedJobId).length }}</span>
             </div>
-            <!-- Tasks -->
-            <div class="space-y-2">
-              <div v-for="task in tasksByStatus(job.id, col.id)" :key="task.id">
-                <div @click="openTaskDetail(task)"
-                  :class="[
-                    'rounded-xl border p-3 cursor-pointer transition-all duration-150 hover:shadow-sm',
-                    task.status === 'done' ? 'bg-surface-raised/70 border-emerald-100' :
-                    task.status === 'in-progress' ? 'bg-accent-dim/70 border-accent' :
-                    'bg-surface border-border-subtle hover:border-border'
-                  ]">
-                  <div class="flex items-start gap-2 mb-1.5">
-                    <span :class="['w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0', col.color]" />
-                    <span v-if="getTaskStepIndex(task) > 0"
-                      class="text-xs px-1.5 py-0.5 rounded bg-surface text-secondary font-semibold flex-shrink-0">
-                      #{{ getTaskStepIndex(task) }}
-                    </span>
-                    <span class="text-sm font-medium text-primary leading-snug flex-1">{{ task.title }}</span>
-                    <span v-if="task.status === 'in-progress'"
-                      class="text-xs px-1.5 py-0.5 rounded bg-accent-dim text-accent font-semibold flex-shrink-0">
-                      执行中
-                    </span>
-                  </div>
-                  <p v-if="task.description"
-                    class="text-xs text-secondary ml-3.5 line-clamp-2 mb-2 leading-relaxed">
-                    {{ task.description }}
-                  </p>
-                  <div class="flex items-center justify-between ml-3.5">
-                    <span class="text-xs text-muted">{{ task.agent }}</span>
-                    <span v-if="task.excard"
-                      class="text-xs px-1.5 py-0.5 rounded bg-accent-dim text-accent font-medium">
-                      {{ task.excard }}
-                    </span>
-                  </div>
+            <div class="space-y-3">
+              <div v-for="step in getTodoSteps(selectedJobId)" :key="step.id"
+                   class="bg-white rounded-lg border border-border-subtle p-3 shadow-xs hover:shadow-sm transition-shadow">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">
+                    步骤 {{ getStepsForJob(selectedJobId).indexOf(step) + 1 }}
+                  </span>
+                  <span :class="['text-xs px-1.5 py-0.5 rounded font-medium',
+                                (step.step_type || step.stepType) === 'excard' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700']">
+                    {{ getStepTypeLabel(step.step_type || step.stepType) }}
+                  </span>
+                </div>
+                <div class="text-sm font-medium text-primary mb-1">{{ step.title }}</div>
+                <div v-if="step.description" class="text-xs text-muted mb-2">{{ step.description }}</div>
+                <div v-if="step.agent" class="text-xs text-accent">
+                  {{ getAgentName(step.agent) }}
                 </div>
               </div>
-              <div v-if="tasksByStatus(job.id, col.id).length === 0"
-                class="py-6 text-center text-xs text-muted">
-                暂无
+              <div v-if="getTodoSteps(selectedJobId).length === 0"
+                   class="py-8 text-center text-xs text-muted">
+                暂无数步骤
+              </div>
+            </div>
+          </div>
+
+          <!-- In Progress 列 -->
+          <div class="border-r border-border-subtle p-4 bg-blue-50/30">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="w-2 h-2 rounded-full bg-accent animate-pulse"></span>
+              <span class="text-sm font-semibold text-secondary">执行中</span>
+              <span class="text-xs text-muted ml-auto">{{ getInProgressSteps(selectedJobId).length }}</span>
+            </div>
+            <div class="space-y-3">
+              <div v-for="step in getInProgressSteps(selectedJobId)" :key="step.id"
+                   class="bg-white rounded-lg border border-accent/50 p-3 shadow-sm ring-1 ring-accent/20">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
+                    步骤 {{ getStepsForJob(selectedJobId).indexOf(step) + 1 }}
+                  </span>
+                  <span :class="['text-xs px-1.5 py-0.5 rounded font-medium',
+                                (step.step_type || step.stepType) === 'excard' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700']">
+                    {{ getStepTypeLabel(step.step_type || step.stepType) }}
+                  </span>
+                </div>
+                <div class="text-sm font-medium text-primary mb-1">{{ step.title }}</div>
+                <div v-if="step.description" class="text-xs text-muted mb-2">{{ step.description }}</div>
+                <div v-if="step.agent" class="text-xs text-accent">
+                  {{ getAgentName(step.agent) }}
+                </div>
+              </div>
+              <div v-if="getInProgressSteps(selectedJobId).length === 0"
+                   class="py-8 text-center text-xs text-muted">
+                暂无数步骤
+              </div>
+            </div>
+          </div>
+
+          <!-- Done 列 -->
+          <div class="p-4 bg-green-50/30">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="w-2 h-2 rounded-full bg-green-500"></span>
+              <span class="text-sm font-semibold text-secondary">已完成</span>
+              <span class="text-xs text-muted ml-auto">{{ getDoneSteps(selectedJobId).length }}</span>
+            </div>
+            <div class="space-y-3">
+              <div v-for="step in getDoneSteps(selectedJobId)" :key="step.id"
+                   class="bg-white rounded-lg border border-green-200 p-3 shadow-xs opacity-90">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">
+                    步骤 {{ getStepsForJob(selectedJobId).indexOf(step) + 1 }}
+                  </span>
+                  <span :class="['text-xs px-1.5 py-0.5 rounded font-medium',
+                                (step.step_type || step.stepType) === 'excard' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700']">
+                    {{ getStepTypeLabel(step.step_type || step.stepType) }}
+                  </span>
+                </div>
+                <div class="text-sm font-medium text-primary mb-1">{{ step.title }}</div>
+                <div v-if="step.description" class="text-xs text-muted mb-2">{{ step.description }}</div>
+                <div v-if="step.agent" class="text-xs text-accent">
+                  {{ getAgentName(step.agent) }}
+                </div>
+              </div>
+              <div v-if="getDoneSteps(selectedJobId).length === 0"
+                   class="py-8 text-center text-xs text-muted">
+                暂无数步骤
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div v-if="jobs.length === 0"
-        class="flex flex-col items-center justify-center py-24 text-muted">
+      <!-- 如果没有选择工作，显示提示 -->
+      <div v-else-if="activeJobs.length > 0" class="flex flex-col items-center justify-center py-24 text-muted">
         <div class="text-5xl mb-3">📋</div>
-        <div class="text-base font-medium">暂无工作</div>
-        <div class="text-sm mt-1">点击「+ 新建任务」开始</div>
+        <div class="text-base font-medium">选择上方正在执行的工作查看进度</div>
+      </div>
+
+      <!-- 如果没有正在执行的工作，显示其他工作 -->
+      <div v-else>
+        <h3 class="text-sm font-semibold text-secondary mb-3">其他工作</h3>
+        <div v-if="otherJobs.length > 0" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div v-for="job in otherJobs" :key="job.id"
+               class="bg-surface rounded-xl border border-border-subtle p-5 shadow-xs hover:shadow-sm transition-shadow">
+            <div class="flex items-start justify-between mb-3">
+              <div>
+                <div class="font-semibold text-primary text-sm">{{ job.title }}</div>
+                <p class="text-xs text-muted mt-1">{{ job.description }}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 mb-4">
+              <span :class="['text-xs px-2 py-0.5 rounded-md font-medium',
+                            job.status === 'done' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600']">
+                {{ job.status === 'done' ? '已完成' : '未开始' }}
+              </span>
+            </div>
+            <button @click="startWorkflow(job.id)"
+                    class="w-full py-1.5 bg-accent text-white rounded-lg text-xs font-medium hover:bg-accent-hover transition-colors">
+              ▶ 启动
+            </button>
+          </div>
+        </div>
+        <div v-else class="flex flex-col items-center justify-center py-24 text-muted">
+          <div class="text-5xl mb-3">📋</div>
+          <div class="text-base font-medium">暂无数工作</div>
+          <div class="text-sm mt-1">在「工作」tab中创建工作</div>
+        </div>
       </div>
     </div>
-
-    <!-- ===== Task Detail Slide Panel ===== -->
-    <Teleport to="body">
-      <div v-if="showDetail" class="fixed inset-0 z-50" @click.self="closeDetail">
-        <div class="absolute inset-0 bg-stone-900/20 backdrop-blur-sm" @click="closeDetail" />
-        <div class="absolute right-0 top-0 h-full w-full max-w-md bg-surface shadow-md flex flex-col animate-slide-in-right border-l border-border-subtle">
-          <!-- Header -->
-          <div class="px-5 py-4 border-b border-border-subtle flex items-start justify-between gap-3">
-            <div class="flex-1 min-w-0">
-              <h2 class="font-bold text-primary text-base leading-snug">{{ selectedTask?.title }}</h2>
-              <p class="text-xs text-muted mt-1">{{ getJobTitle(selectedTask) }}</p>
-            </div>
-            <button @click="closeDetail"
-              class="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:bg-surface hover:text-primary transition-colors flex-shrink-0">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
-            </button>
-          </div>
-          <!-- Content -->
-          <div v-if="selectedTask" class="flex-1 overflow-y-auto p-5 space-y-5">
-            <div>
-              <div class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">操作</div>
-              <button v-if="selectedTask.status === 'todo'" @click="startTask"
-                class="px-4 py-2 bg-accent text-white rounded-lg text-sm font-semibold hover:bg-accent-hover transition-all duration-150 shadow-xs">
-                ▶ 启动任务
-              </button>
-            </div>
-            <div>
-              <div class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">状态</div>
-              <div class="flex gap-2">
-                <button v-for="opt in statusOptions" :key="opt.value" @click="changeStatus(opt.value)"
-                  :class="[
-                    'px-3 py-1.5 rounded-lg text-sm font-medium border transition-all duration-150',
-                    selectedTask.status === opt.value
-                      ? opt.value === 'done' ? 'bg-surface-raised border-emerald-200 text-orange-600' :
-                        opt.value === 'in-progress' ? 'bg-accent-dim border-accent text-accent' :
-                        'bg-surface border-border text-primary'
-                      : 'bg-surface border-border text-muted hover:bg-surface-raised'
-                  ]">
-                  {{ opt.label }}
-                </button>
-              </div>
-            </div>
-            <div>
-              <div class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">描述</div>
-              <p class="text-sm text-primary leading-relaxed whitespace-pre-wrap">{{ selectedTask.description || '暂无描述' }}</p>
-            </div>
-            <div>
-              <div class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">负责人</div>
-              <div class="flex items-center gap-2">
-                <span class="text-xl">{{ agentAvatars[selectedTask.agent] || '👤' }}</span>
-                <span class="text-sm font-medium text-primary">{{ selectedTask.agent }}</span>
-              </div>
-            </div>
-            <div v-if="selectedTask.excard">
-              <div class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">ExCard</div>
-              <div class="px-3 py-2 bg-accent-dim rounded-lg text-sm text-violet-700 font-medium">
-                {{ selectedTask.excard }}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">步骤</div>
-              <p class="text-sm text-primary">#{{ getTaskStepIndex(selectedTask) }} / {{ tasksForJob(selectedTask.jobId).length }}</p>
-            </div>
-            <div>
-              <div class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">创建时间</div>
-              <p class="text-sm text-primary">{{ selectedTask.createdAt }}</p>
-            </div>
-          </div>
-          <div class="px-5 py-4 border-t border-border-subtle">
-            <button @click="closeDetail"
-              class="w-full py-2 text-secondary hover:bg-surface rounded-lg text-sm font-medium transition-colors">
-              关闭
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- ===== Create Task Modal ===== -->
-    <Teleport to="body">
-      <div v-if="showCreateModal"
-        class="fixed inset-0 bg-stone-900/30 backdrop-blur-sm flex items-center justify-center z-50"
-        @click.self="showCreateModal = false">
-        <div class="bg-surface rounded-2xl shadow-md w-full max-w-md mx-4 border border-border-subtle">
-          <div class="px-6 py-4 border-b border-border-subtle">
-            <h3 class="text-base font-semibold text-primary">新建任务</h3>
-          </div>
-          <div class="p-6 space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-primary mb-1.5">所属工作</label>
-              <select v-model="newTask.jobId"
-                class="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent bg-surface">
-                <option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.title }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-primary mb-1.5">标题</label>
-              <input v-model="newTask.title" type="text" placeholder="输入任务标题"
-                class="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-primary mb-1.5">描述</label>
-              <textarea v-model="newTask.description" rows="2" placeholder="输入任务描述"
-                class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent" />
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-primary mb-1.5">负责人</label>
-                <select v-model="newTask.agent"
-                  class="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent bg-surface">
-                  <option v-for="agent in agents" :key="agent.id" :value="agent.name">
-                    {{ agent.name }}
-                    <span v-if="agent.connected === false"> (已解绑)</span>
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-primary mb-1.5">优先级</label>
-                <select v-model="newTask.priority"
-                  class="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent bg-surface">
-                  <option value="high">高</option>
-                  <option value="medium">中</option>
-                  <option value="low">低</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          <div class="px-6 py-4 border-t border-border-subtle flex justify-end gap-3">
-            <button @click="showCreateModal = false"
-              class="px-4 py-2 text-secondary hover:bg-surface rounded-lg text-sm font-medium transition-colors">
-              取消
-            </button>
-            <button @click="createTask"
-              class="px-4 py-2 bg-accent text-white rounded-lg text-sm font-semibold hover:bg-accent-hover transition-all duration-150">
-              创建
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>

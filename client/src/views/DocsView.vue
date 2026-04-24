@@ -1,186 +1,326 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { marked } from 'marked'
 
 const docs = ref([
   {
-    id: 'doc-1',
-    title: 'Dashboard 与 OpenClaw Gateway 的配对方式',
-    content: `## Dashboard 与 OpenClaw Gateway 的配对方式
+    id: 'intro',
+    title: '项目介绍',
+    content: `# OpenExTeam
 
-OpenExTeam Dashboard 是 **Operator 控制台**，通过标准 Gateway 协议连接用户自托管的 OpenClaw Gateway。
+OpenExTeam 是一个跨框架 AI Agent 团队协作平台。
 
-⚠️ **重要：** OpenClaw 需要**设备配对**才能连接，不仅仅是 Token。
+## 核心功能
 
-### 用户使用步骤
+- **多底座支持**：统一管理 OpenClaw、Hermes、DeerFlow 等不同框架的 Agent
+- **聊天协作**：与单个 Agent 对话，或进行群聊
+- **工作编排**：创建多步骤工作流，自动在 Agent 间流转
+- **ExCard 模板**：使用 Markdown 定义完整的任务执行模板
+- **实时监控**：查看 Agent 状态和执行日志
 
-#### 第一步：在 **OpenExTeam** 添加连接
+## 快速开始
 
-**OpenExTeam Dashboard 端，进入设置页面：**
-- 填写 Gateway URL: \`ws://127.0.0.1:18789\`（或远程地址）
-- Operator Token: 从 Gateway 获取（\`openclaw config get gateway.auth.token\`）
+1. 在设置页添加底座连接
+2. 在聊天页与 Agent 对话
+3. 在工作页创建并执行任务
+4. 在看板页查看执行进度
 
-点击「测试连接」或「保存」后，Dashboard 会尝试连接 Gateway。
+## 核心概念
 
-#### 第二步：在 Gateway 端批准配对
+| 概念 | 说明 |
+|------|------|
+| Agent | AI 助手，可以是 LLM 或其他智能体 |
+| 底座 | Agent 运行框架（OpenClaw/Hermes/DeerFlow） |
+| 工作 | 任务容器，可包含多个步骤 |
+| 步骤 | 工作的单个执行单元 |
+| ExCard | Markdown 格式的任务模板 |`,
+    category: '快速入门',
+  },
+  {
+    id: 'openclaw',
+    title: 'OpenClaw 连接',
+    content: `# OpenClaw 连接指南
 
-**Gateway 端（终端执行）：**
+## 前置准备
+
+确保 OpenClaw Gateway 正在运行：
+
+\`\`\`bash
+openclaw gateway start
+\`\`\`
+
+## 获取 Token
+
+\`\`\`bash
+openclaw config get gateway.auth.token
+\`\`\`
+
+## 在 Dashboard 添加连接
+
+1. 进入设置页面
+2. 点击「新建连接」
+3. 填写信息：
+   - 连接名称：如「我的 OpenClaw」
+   - 类型：选择 OpenClaw
+   - URL：\`ws://127.0.0.1:18789\`
+   - Token：从上面获取的 token
+
+## 批准配对
+
+连接测试后，在 Gateway 端执行：
+
 \`\`\`bash
 # 查看待配对设备
 openclaw devices list
 
-# 批准 Dashboard 设备
+# 批准配对
 openclaw devices approve <requestId>
 \`\`\`
 
-#### 第三步：Dashboard 自动连接
+## 验证连接
 
-配对批准后，Dashboard 会自动完成连接并开始通信。
+设置页会显示「已连接」状态，Agent 列表自动加载。`,
+    category: '连接指南',
+  },
+  {
+    id: 'hermes',
+    title: 'Hermes 连接',
+    content: `# Hermes 连接指南
 
-### 部署模式
+## 前置准备
 
-#### 模式一：本地开发（同机运行）
+确保 Hermes 服务正在运行。
 
-\`\`\`bash
-# 1. 启动 Gateway
-openclaw gateway start
+## 在 Dashboard 添加连接
 
-# 2. 查看/配置 token
-openclaw config get gateway.auth.token
+1. 进入设置页面
+2. 点击「新建连接」
+3. 填写信息：
+   - 连接名称：如「我的 Hermes」
+   - 类型：选择 Hermes
+   - URL：Hermes API 地址
+   - Token：认证令牌（如需要）
 
-# 3. Dashboard 配置 ws://127.0.0.1:18789
+## 验证连接
 
-# 4. 批准配对（当 Dashboard 提示时）
-openclaw devices list
-openclaw devices approve <requestId>
-\`\`\`
+设置页会显示「已连接」状态，Agent 列表自动加载。`,
+    category: '连接指南',
+  },
+  {
+    id: 'deerflow',
+    title: 'DeerFlow 连接',
+    content: `# DeerFlow 连接指南
 
-#### 模式二：Tailscale 网络（不同机运行）
+## 前置准备
 
-\`\`\`bash
-# 1. 确保服务器和本地都在 Tailscale 网络
-# 2. Dashboard 配置 ws://<服务器TailscaleIP>:18789
-# 3. 在服务器批准配对
-\`\`\`
+确保 DeerFlow 服务正在运行。
 
-### Dashboard 连接配置字段说明
+## 在 Dashboard 添加连接
 
-| 字段 | 说明 | 示例 |
-|------|------|------|
-| 连接名称 | 给这个连接起个名字 | 我的 OpenClaw |
-| Gateway URL | Gateway WebSocket 地址 | ws://127.0.0.1:18789 |
-| Operator Token | Gateway 认证令牌 | sk-xxxxxx |
+1. 进入设置页面
+2. 点击「新建连接」
+3. 填写信息：
+   - 连接名称：如「我的 DeerFlow」
+   - 类型：选择 DeerFlow
+   - URL：DeerFlow API 地址
+   - Token：认证令牌（如需要）
 
-### 验证连接
+## 验证连接
 
-点击「测试连接」后，Dashboard 会：
-1. 建立 WebSocket 连接
-2. 等待 Gateway 发送 \`connect.challenge\`
-3. 发送 \`connect\` 请求（role=operator + token）
-4. 如果返回 NOT_PAIRED，显示提示信息：「请在 Gateway 端运行 \`openclaw devices approve <requestId>\` 批准配对」
-5. 用户批准后，Dashboard 使用 device 身份完成连接
+设置页会显示「已连接」状态，Agent 列表自动加载。`,
+    category: '连接指南',
+  },
+  {
+    id: 'job',
+    title: '工作使用指南',
+    content: `# 工作使用指南
 
-### 常见错误排查
+## 什么是工作
 
-| 错误 | 原因 | 解决 |
-|------|------|------|
-| NOT_PAIRED | 设备未配对 | 在 Gateway 端运行 \`openclaw devices approve\` |
-| DEVICE_IDENTITY_REQUIRED | 缺少 device 身份 | Dashboard 会自动生成 device keypair |
-| Connection refused | Gateway 未启动 | 检查 \`openclaw gateway status\` |
-| Authentication failed | Token 不匹配 | 确认 token 与 \`gateway.auth.token\` 一致 |
+工作是任务的容器，可以编排多个步骤自动执行。
 
-### 安全建议
+## 创建工作
 
-1. **生产环境**：使用 Tailscale 或 TLS (\`wss://\`)
-2. **Token 轮换**：定期执行 \`openclaw config set gateway.auth.token\`
-3. **设备管理**：定期查看已配对设备 \`openclaw devices list\`
-4. **撤销配对**：使用 \`openclaw devices reject <requestId>\` 移除不信任设备`,
+1. 进入工作页面
+2. 点击「新建工作」
+3. 填写：
+   - 标题：工作名称
+   - 描述：工作说明
+   - 类型：一次性或周期性
+
+## 添加步骤
+
+在工作详情页，点击「编辑」添加步骤：
+
+- **任务**：简单的单步任务
+- **ExCard**：使用预定义的复杂模板
+
+每个步骤需要：
+- 标题：步骤名称
+- 描述（可选）：步骤说明
+- 执行 Agent：由哪个 Agent 执行
+
+## 启动工作
+
+点击「启动工作流」按钮：
+1. Dashboard 自动发送第一步给指定 Agent
+2. Agent 执行后返回 \`[WORKFLOW] status: complete\`
+3. Dashboard 自动推进到下一步
+4. 所有步骤完成后标记工作为完成
+
+## 查看进度
+
+在看板页面查看工作的实时进度。`,
     category: '使用指南',
   },
   {
-    id: 'doc-2',
-    title: 'Task 固化规则',
-    content: `## 固化条件
+    id: 'excard',
+    title: 'ExCard 使用指南',
+    content: `# ExCard 使用指南
 
-当 Task 执行 ≥ 2 次时，Agent 应考虑将其固化为 ExCard。
+## 什么是 ExCard
 
-## 固化流程
+ExCard 是 Markdown 格式的完整任务执行模板。
 
-1. Agent 通过 EC Creator 工具生成 ExCard
-2. ExCard 保存到团队共享目录
-3. Agent 通知人类确认
+## 创建 ExCard
 
-## 相关 Skill
+1. 进入 ExCard 页面
+2. 点击「新建 ExCard」
+3. 填写：
+   - 标题：ExCard 名称
+   - 描述：用途说明
+   - 内容：Markdown 格式的完整模板
+   - 绑定 Agent：指定默认执行的 Agent
 
-- EC Creator（EC 创建工具）：GitHub / ClawHub（待发布）
-- LongTask（长程任务管理）：GitHub / ClawHub（待发布）`,
-    category: 'Agent 行为准则',
-  },
-  {
-    id: 'doc-3',
-    title: 'ExCard 命名规范',
-    content: `## 命名格式
+## ExCard 内容格式
 
-EC{编号}-{AgentID}-{描述}
+\`\`\`markdown
+# ExCard 标题
 
-## 示例
+## 任务描述
 
-- EC001-pinpin-standard-article
-- EC002-kaikai-rss-fetch
+详细描述任务...
 
-## 规则
+## 执行步骤
 
-- 全局编号在首位，按创建顺序排列
-- AgentID 在中置，归属清晰
-- 描述在最后，一看就懂
-- 所有 ExCard 存放在 Dashboard 的共享目录`,
-    category: '团队规范',
-  },
-  {
-    id: 'doc-4',
-    title: 'Job 创建指南',
-    content: `## Job 定义
+1. 第一步...
+2. 第二步...
 
-Job 是工作容器，可以包含：
-- 多个 Task
-- 多个 ExCard
+## 输出格式
 
-## Task 与 ExCard 关系
+要求 Agent 按格式输出...
+\`\`\`
 
-- ExCard 是固化的任务模板
-- Task 是 ExCard 的实例
-- 同一 ExCard 可生成多个 Task 实例
+## 在工作中使用 ExCard
 
-## 创建方式
+编辑工作时，添加类型为「ExCard」的步骤，选择创建好的 ExCard。
 
-- 人类：通过 Dashboard UI 创建
-- Agent：通过聊天指令或 Skill 创建`,
+## 工作流返回格式
+
+Agent 完成后，需要返回：
+
+\`\`\`
+[WORKFLOW job-<jobId> step-<stepIndex>]
+status: complete
+message: 完成情况描述
+\`\`\`
+
+出错时返回：
+
+\`\`\`
+[WORKFLOW job-<jobId> step-<stepIndex>]
+status: error
+message: 错误描述
+\`\`\`
+
+## 提议创建 ExCard
+
+如果 Agent 认为这个任务可以固化成 ExCard，可以在返回结果中包含：
+
+\`\`\`
+[EXCARD_PROPOSAL]
+name: ExCard 名称
+description: 描述这个 ExCard 的用途
+agent: <agent-id> (可选，默认当前 agent)
+markdown:
+# ExCard 标题
+## 任务描述
+这里写 ExCard 的完整 Markdown 内容
+...
+\`\`\`
+
+Dashboard 会自动检测到这个格式并弹出确认框。
+
+## 斜杠命令
+
+在聊天输入框中输入斜杠命令可以告诉 Agent 做什么：
+
+- `/ec <需求>` - 让 Agent 帮忙创建 ExCard
+- `/job <需求>` - 让 Agent 帮忙创建工作（开发中）
+
+示例：
+\`\`\`
+/ec 创建一个每日汇总报告的 ExCard，功能包括收集当天的信息并生成报告
+\`\`\`
+
+Agent 收到后会返回 \`[EXCARD_PROPOSAL]\` 格式的提议，确认后创建。`,
     category: '使用指南',
   },
   {
-    id: 'doc-5',
-    title: 'Skill 下载',
-    content: `## OpenExCard 相关 Skill
+    id: 'monitor',
+    title: '监控面板',
+    content: `# 监控面板
 
-以下 Skill 需要安装到 Agent 中：
+## Agent 状态
 
-| Skill | 说明 | 下载链接 |
-|-------|------|---------|
-| EC Creator | 用于创建和校验 ExCard | GitHub（待发布）/ ClawHub（待发布） |
-| LongTask Manager | 长程任务编排引擎 | GitHub（待发布）/ ClawHub（待发布） |
-| EC Loader | ExCard 执行加载器 | GitHub（待发布）/ ClawHub（待发布） |
+顶部显示所有已连接的 Agent：
+- 🟢 在线
+- 🟠 忙碌
+- ⚪ 离线/已解绑
 
-## 安装方式
+## 实时日志
 
-# 方式一：从 GitHub 安装
-cd ~/.openclaw/skills && git clone <repo-url>
+显示系统和 Agent 的所有活动：
+- 工作流启动/完成
+- Agent 消息发送/接收
+- 配对事件
+- 错误警告
 
-# 方式二：从 ClawHub 安装
-clawhub install <skill-name>
+日志按时间倒序排列，最新在最前。
 
-## 注意事项
+## 刷新
 
-- Skill 发布后需同步更新本文档的下载链接
-- 不同 Agent 底座（OpenClaw / DeerFlow 等）安装方式可能不同`,
+点击右上角刷新按钮重新加载日志。`,
+    category: '使用指南',
+  },
+  {
+    id: 'board',
+    title: '看板使用',
+    content: `# 看板使用指南
+
+## 看板用途
+
+看板专门用于展示正在执行工作的进度。
+
+## 查看工作
+
+顶部显示当前正在执行的工作列表，点击查看详情。
+
+## 步骤状态
+
+每个工作分为三列：
+
+- **待执行**：灰色，未开始的步骤
+- **执行中**：蓝色，当前正在执行的步骤（带脉冲动画）
+- **已完成**：绿色，已完成的步骤
+
+## 实时更新
+
+步骤状态变化时看板自动更新，无需刷新页面。
+
+## 启动工作
+
+在工作页面点击「启动工作流」，或在看板的「其他工作」区域点击「启动」。`,
     category: '使用指南',
   },
 ])
@@ -193,14 +333,18 @@ function selectDoc(doc) {
 
 function getCategoryColor(category) {
   const map = {
-    'Agent 行为准则': 'bg-red-50 text-red-600',
-    '团队规范': 'bg-blue-50 text-blue-600',
+    '快速入门': 'bg-purple-50 text-purple-600',
+    '连接指南': 'bg-blue-50 text-blue-600',
     '使用指南': 'bg-green-50 text-green-600',
   }
   return map[category] || 'bg-stone-100 text-stone-600'
 }
-</script>
 
+const renderedContent = computed(() => {
+  if (!selectedDoc.value) return ''
+  return marked.parse(selectedDoc.value.content)
+})
+</script>
 
 <template>
   <div class="h-full flex gap-4">
@@ -208,7 +352,7 @@ function getCategoryColor(category) {
     <div class="w-64 flex-shrink-0 overflow-y-auto">
       <div class="mb-4">
         <h2 class="text-lg font-semibold text-primary">文档</h2>
-        <p class="text-sm text-secondary mt-0.5">团队规范与 Agent 行为准则</p>
+        <p class="text-sm text-secondary mt-0.5">使用指南与连接说明</p>
       </div>
       <div class="space-y-1">
         <div
@@ -244,9 +388,29 @@ function getCategoryColor(category) {
         </div>
         <!-- 内容 -->
         <div class="flex-1 overflow-y-auto p-6" style="max-height: calc(100vh - 200px);">
-          <pre class="text-sm text-primary leading-relaxed whitespace-pre-wrap font-sans">{{ selectedDoc.content }}</pre>
+          <div
+            class="prose prose-sm max-w-none"
+            v-html="renderedContent"
+          ></div>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Prose styles for markdown rendering */
+.prose h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; color: #1f2937; }
+.prose h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem; margin-top: 1.5rem; color: #374151; }
+.prose h3 { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1rem; color: #374151; }
+.prose p { margin-bottom: 0.75rem; line-height: 1.6; color: #4b5563; }
+.prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 0.75rem; }
+.prose ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 0.75rem; }
+.prose li { margin-bottom: 0.25rem; color: #4b5563; }
+.prose code { background: #f3f4f6; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875rem; color: #dc2626; }
+.prose pre { background: #1f2937; color: #f9fafb; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 0.75rem; }
+.prose pre code { background: transparent; padding: 0; color: inherit; }
+.prose table { width: 100%; border-collapse: collapse; margin-bottom: 0.75rem; }
+.prose th, .prose td { border: 1px solid #e5e7eb; padding: 0.5rem 0.75rem; text-align: left; }
+.prose th { background: #f9fafb; font-weight: 600; }
+</style>

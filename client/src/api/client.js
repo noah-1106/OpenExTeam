@@ -12,10 +12,36 @@ async function request(method, path, body) {
   };
   if (body) opts.body = JSON.stringify(body);
 
-  const res = await fetch(`${BASE}${path}`, opts);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  return data;
+  try {
+    const res = await fetch(`${BASE}${path}`, opts);
+
+    // 尝试解析响应
+    let data;
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      data = await res.json();
+    } else {
+      // 如果不是JSON，尝试读取文本
+      const text = await res.text();
+      data = { error: text || `HTTP ${res.status}` };
+    }
+
+    if (!res.ok) {
+      const errorMsg = data?.error || data?.message || `HTTP ${res.status}`;
+      console.error(`[API] ${method} ${path} failed:`, errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    return data;
+  } catch (err) {
+    // 网络错误等
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      console.error(`[API] Network error for ${method} ${path}:`, err);
+      throw new Error('网络连接失败，请检查服务器是否运行');
+    }
+    console.error(`[API] ${method} ${path} error:`, err);
+    throw err;
+  }
 }
 
 const api = {
@@ -33,6 +59,7 @@ const api = {
   updateJob: (id, data) => request('PATCH', `/api/jobs/${id}`, data),
   deleteJob: (id) => request('DELETE', `/api/jobs/${id}`),
   getJobExcard: (id) => request('GET', `/api/jobs/${id}/excard`),
+  getJobSteps: (id) => request('GET', `/api/jobs/${id}/steps`),
 
   // --- Tasks ---
   getTasks: (jobId) => request('GET', `/api/tasks${jobId ? `?jobId=${jobId}` : ''}`),

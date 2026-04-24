@@ -62,8 +62,18 @@ function setupMessagesRoutes(app, activeAdapters) {
         callback: `http://localhost:${process.env.PORT || 4000}/webhook/task-complete`
       });
       broadcast('message_sent', { messageId, agentId, content: messageContent });
+      // 广播日志事件
+      broadcast('log', {
+        id: messageId,
+        type: type || 'chat',
+        from: 'dashboard',
+        to: agentId,
+        content: messageContent,
+        timestamp: new Date().toISOString()
+      });
       res.json({ success: true, messageId, ...result });
     } catch (err) {
+      console.error('[Messages API] Error sending message:', err);
       res.status(500).json({ success: false, error: err.message });
     }
   });

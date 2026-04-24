@@ -1,43 +1,46 @@
 /**
- * Workflow Service - 工作流推进逻辑（多步骤完整版）
+ * Workflow Service - Job 多步骤编排
  *
- * 新设计原则：
- * - Job 可以绑定 ExCard（完整的执行模板）
- * - ExCard 不拆分成多个 Task，而是作为整体发送给 Agent
- * - Task 是可选的，用于人工跟踪，不是 ExCard 的拆分结果
- * - Agent 通过消息总线回复，不是 webhook 回调
- * - 工作流信息同步到聊天界面
- * - 支持 ExCard 中的多步骤 workflow 自动推进
+ * 设计原则：
+ * - Job 可以有多个步骤（job_steps 表）
+ * - 每个步骤可以是 Task 或 ExCard
+ * - ExCard 是一个完整的步骤（不再拆分内部 workflow）
+ * - Agent 回复后自动流转到下一步
+ * - 出错时停止并通知
  */
 
-const { queryAll, queryGet, queryRun } = require('../models/db');
+const { queryAll, queryGet, queryRun, beginTransaction, commitTransaction, rollbackTransaction, runTransaction } = require('../models/db');
 const { broadcast } = require('../events/sse');
 const { getJob } = require('../models/job');
 const { getExcard, getExcardMd } = require('../storage/excards');
+const { getStepsForJob, updateStep } = require('../models/job_steps');
 const { v4: uuidv4 } = require('uuid');
 
-// 从外部传入 activeWorkflows 映射
+// 从外部传入 activeWorkflows 和 activeAdapters 映射
 let activeWorkflows = null;
+let activeAdapters = null;
 
 function setActiveWorkflowsRef(ref) {
   activeWorkflows = ref;
 }
 
+function setActiveAdaptersRef(ref) {
+  activeAdapters = ref;
+}
+
 /**
- * 向聊天界面发送系统消息，用于追踪工作流进度
+ * 向聊天界面发送系统消息
  */
 function sendSystemMessageToChat(jobId, messageType, content, relatedAgent = null) {
   try {
     const messageId = uuidv4();
     const timestamp = new Date().toISOString();
 
-    // 记录到 message_log
     queryRun(
       'INSERT INTO message_log (id,type,from_agent,to_agent,content,timestamp,job_id) VALUES (?,?,?,?,?,?,?)',
       [messageId, messageType, 'system', relatedAgent || 'dashboard', JSON.stringify(content), timestamp, jobId]
     );
 
-    // 广播消息，让前端聊天界面收到
     broadcast('agent_message', {
       id: messageId,
       type: messageType,
@@ -48,26 +51,31 @@ function sendSystemMessageToChat(jobId, messageType, content, relatedAgent = nul
       jobId: jobId
     });
 
-    console.log(`[Workflow] System message sent to chat: ${messageType}`);
+    // 同时广播日志事件
+    broadcast('log', {
+      id: messageId,
+      type: messageType,
+      from: 'system',
+      to: relatedAgent || 'dashboard',
+      content: content,
+      timestamp: timestamp,
+      jobId: jobId
+    });
+
+    console.log(`[Workflow] System message sent: ${messageType}`);
   } catch (err) {
     console.error('[Workflow] Failed to send system message:', err.message);
   }
 }
 
 /**
- * 获取 ExCard 的 workflow 步骤
+ * 获取 Job 步骤
  */
-function getWorkflowSteps(excardData) {
-  if (!excardData || !excardData.workflow) {
-    return [];
-  }
-  // 确保步骤按 index 排序
-  return excardData.workflow
-    .filter(step => step && step.index)
-    .sort((a, b) => a.index - b.index);
+function getJobSteps(jobId) {
+  return getStepsForJob(jobId);
 }
 
-function startWorkflow(jobId, activeAdapters) {
+function startWorkflow(jobId) {
   try {
     const job = getJob(jobId);
     if (!job) {
@@ -75,88 +83,80 @@ function startWorkflow(jobId, activeAdapters) {
       return { success: false, error: 'Job not found' };
     }
 
-    // 检查 job 状态
-    if (job.status === 'in-progress' || job.status === 'done') {
-      console.warn(`[Workflow] Job ${jobId} already in status: ${job.status}`);
-      return { success: false, error: `Job already ${job.status}` };
+    if (job.status === 'in-progress') {
+      console.warn(`[Workflow] Job ${jobId} already in progress`);
+      return { success: false, error: 'Job already in progress' };
     }
 
-    // 先确定 excard 和 workflow 步骤
-    let excardId = job.excard_id || job.excard;
-    let excardData = null;
-    let workflowSteps = [];
-
-    if (excardId) {
-      try {
-        excardData = getExcard(excardId);
-        workflowSteps = getWorkflowSteps(excardData);
-        console.log(`[Workflow] ExCard has ${workflowSteps.length} workflow steps`);
-      } catch (e) {
-        console.warn('[Workflow] Failed to load ExCard:', e.message);
-      }
+    // 如果是已完成的工作，我们允许重新启动
+    if (job.status === 'done') {
+      console.log(`[Workflow] Restarting completed job ${jobId}`);
     }
 
-    // 确定当前步骤（从第1步开始）
-    const currentStepIndex = workflowSteps.length > 0 ? 1 : 0;
+    // 获取 Job 步骤
+    let jobSteps = getJobSteps(jobId);
+    let hasSteps = jobSteps && jobSteps.length > 0;
+    let totalSteps = hasSteps ? jobSteps.length : 1; // 如果没有步骤，就只执行一次
+    let currentStepIndex = 1;
 
-    // 确定 agentName
-    let agentName = job.agent;
-    if (!agentName && workflowSteps.length > 0) {
-      const firstStep = workflowSteps[0];
-      agentName = firstStep.agent;
-      console.log(`[Workflow] Using agent from first workflow step: ${agentName}`);
+    // 确定执行 Agent
+    let agentName = null;
+
+    if (hasSteps) {
+      const firstStep = jobSteps[0];
+      agentName = firstStep.agent || job.agent;
+    } else {
+      // 没有步骤的旧版情况，用 Job 绑定的 ExCard 的 agent
+      agentName = job.agent;
     }
 
-    if (!agentName && excardData) {
-      agentName = excardData.agentName;
+    if (!agentName) {
+      console.error(`[Workflow] No agent specified for job ${jobId}`);
+      return { success: false, error: 'Job 必须指定执行 Agent' };
     }
 
-    // 更新 Job 状态和 workflow_state
-    queryRun('UPDATE jobs SET status=? WHERE id=?', ['in-progress', jobId]);
-    queryRun(
-      'INSERT OR REPLACE INTO workflow_state (job_id,status,current_step,started_at) VALUES (?,?,?,CURRENT_TIMESTAMP)',
-      [jobId, 'running', currentStepIndex]
-    );
+    // 使用事务更新状态
+    beginTransaction();
+    try {
+      queryRun('UPDATE jobs SET status=? WHERE id=?', ['in-progress', jobId]);
+      queryRun(
+        'INSERT OR REPLACE INTO workflow_state (job_id,status,current_step,started_at) VALUES (?,?,?,CURRENT_TIMESTAMP)',
+        [jobId, 'running', currentStepIndex]
+      );
+      commitTransaction();
+    } catch (txErr) {
+      rollbackTransaction();
+      throw txErr;
+    }
 
-    broadcast('workflow_started', { jobId, currentStep: currentStepIndex, totalSteps: workflowSteps.length });
+    broadcast('workflow_started', { jobId, currentStep: currentStepIndex, totalSteps });
 
-    // 向聊天界面发送工作流启动消息
     const startMessage = {
       title: '工作流已启动',
       jobTitle: job.title,
       message: `工作「${job.title}」已开始执行`,
-      hasExcard: !!excardId,
-      excardId: excardId,
       currentStep: currentStepIndex,
-      totalSteps: workflowSteps.length
+      totalSteps: totalSteps
     };
-
-    if (workflowSteps.length > 0) {
-      startMessage.stepName = workflowSteps[0].name;
-      startMessage.stepDescription = workflowSteps[0].description;
-    }
 
     sendSystemMessageToChat(jobId, 'workflow_start', startMessage, agentName);
 
-    // 发送给 Agent
-    if (excardId) {
-      sendExcardToAgent(job, excardId, activeAdapters, agentName, excardData, currentStepIndex, workflowSteps);
+    // 发送第一个步骤或单个任务
+    if (hasSteps) {
+      sendJobStepToAgent(job, jobSteps[0], currentStepIndex, jobSteps, agentName);
     } else {
-      sendJobToAgent(job, activeAdapters, agentName);
+      sendSingleJobToAgent(job, agentName);
     }
 
     return {
       success: true,
       started: true,
-      hasExcard: !!excardId,
-      excardId,
       currentStep: currentStepIndex,
-      totalSteps: workflowSteps.length
+      totalSteps: totalSteps
     };
 
   } catch (err) {
     console.error('[Workflow] Error starting workflow:', err.message);
-    // 出错时尝试回滚状态
     try {
       queryRun('UPDATE jobs SET status=? WHERE id=?', ['idle', jobId]);
     } catch (rollbackErr) {
@@ -167,44 +167,10 @@ function startWorkflow(jobId, activeAdapters) {
 }
 
 /**
- * 把 ExCard 作为完整的执行模板发送给 Agent（支持多步骤）
+ * 发送 Job 步骤给 Agent
  */
-function sendExcardToAgent(job, excardId, activeAdapters, agentName, excardData, currentStepIndex, workflowSteps) {
-  console.log(`[Workflow] Sending ExCard ${excardId} (step ${currentStepIndex}) to Agent for job ${job.id}`);
-
-  // 获取 ExCard 的完整数据和 Markdown 内容
-  let excardMd = null;
-  try {
-    excardMd = getExcardMd(excardId);
-    if (!excardData) {
-      excardData = getExcard(excardId);
-    }
-  } catch (err) {
-    console.error('[Workflow] Failed to load ExCard:', err.message);
-  }
-
-  // 确定发送目标 Agent
-  if (!agentName && workflowSteps.length > 0) {
-    const step = workflowSteps[currentStepIndex - 1] || workflowSteps[0];
-    agentName = step.agent;
-  }
-
-  if (!agentName && excardData) {
-    agentName = excardData.agentName;
-  }
-
-  if (!agentName && activeAdapters.size > 0) {
-    agentName = Array.from(activeAdapters.keys())[0];
-  }
-
-  if (!agentName) {
-    console.warn('[Workflow] No agent assigned to job');
-    sendSystemMessageToChat(job.id, 'message_failed', {
-      title: '消息发送失败',
-      message: '没有指定 Agent，无法发送任务'
-    });
-    return;
-  }
+function sendJobStepToAgent(job, step, stepIndex, allSteps, agentName) {
+  console.log(`[Workflow] Sending step ${stepIndex}/${allSteps.length} to agent: ${agentName}`);
 
   let adapterName, gatewayAgentId;
   if (agentName.includes(':')) {
@@ -219,100 +185,76 @@ function sendExcardToAgent(job, excardId, activeAdapters, agentName, excardData,
   const adapter = activeAdapters.get(adapterName);
   if (!adapter) {
     console.warn(`[Workflow] Adapter ${adapterName} not found`);
-    sendSystemMessageToChat(job.id, 'message_failed', {
-      title: '消息发送失败',
-      message: `Adapter ${adapterName} 未找到`
-    }, agentName);
+    handleWorkflowError(job.id, agentName, `Adapter ${adapterName} 未找到`);
     return;
   }
 
-  // 构建消息内容 - 包含当前步骤信息
-  let messageContent = `请执行工作「${job.title}」`;
-  if (job.description) {
-    messageContent += `\n\n工作描述：${job.description}`;
+  const isExcardStep = (step.step_type || step.stepType) === 'excard';
+  let messageContent = `请执行工作「${job.title}」的第 ${stepIndex}/${allSteps.length} 步\n\n`;
+  messageContent += `步骤名称：${step.title}\n`;
+  if (step.description) {
+    messageContent += `步骤描述：${step.description}\n`;
   }
 
-  if (workflowSteps.length > 0) {
-    messageContent += `\n\n📋 工作流进度：第 ${currentStepIndex}/${workflowSteps.length} 步`;
-    const currentStep = workflowSteps[currentStepIndex - 1];
-    if (currentStep) {
-      messageContent += `\n\n📍 当前步骤：${currentStep.name}`;
-      if (currentStep.description) {
-        messageContent += `\n${currentStep.description}`;
-      }
+  if (isExcardStep && step.excard_id) {
+    try {
+      const excardMd = getExcardMd(step.excard_id);
+      messageContent += `\n---\n\n关联 ExCard 模板：\n\n${excardMd}`;
+    } catch (e) {
+      console.warn('[Workflow] Failed to load step ExCard:', e.message);
     }
   }
 
-  if (excardMd) {
-    messageContent += `\n\n---\n\n完整 ExCard 模板参考：\n\n${excardMd}`;
+  messageContent += `\n---\n\n完成后请按以下格式回复，以便系统自动推进到下一步：\n\n`;
+  messageContent += `[WORKFLOW job-${job.id} step-${stepIndex}]\nstatus: complete\nmessage: （简要说明完成情况）\n\n`;
+  messageContent += `如果出错，请回复：\n\n`;
+  messageContent += `[WORKFLOW job-${job.id} step-${stepIndex}]\nstatus: error\nmessage: （错误说明）`;
+
+  // Update step status to in-progress
+  try {
+    updateStep(step.id, { status: 'in-progress' });
+  } catch (e) {
+    console.warn('[Workflow] Failed to update step status:', e.message);
   }
 
-  // 发送给 Agent - 通过消息总线
   adapter.send(gatewayAgentId, {
-    type: 'workflow_start',
+    type: 'workflow_step',
     jobId: job.id,
-    currentStep: currentStepIndex,
-    totalSteps: workflowSteps.length,
+    stepIndex: stepIndex,
+    totalSteps: allSteps.length,
+    stepType: step.step_type || step.stepType,
+    stepId: step.id,
     content: {
-      title: job.title,
-      description: job.description,
-      excardId,
-      excardMarkdown: excardMd,
-      workflowSteps: workflowSteps,
-      currentStepIndex: currentStepIndex,
+      title: step.title,
+      description: step.description,
+      excardId: step.excard_id,
       fullPrompt: messageContent
     }
   }).then(() => {
-    // 只有发送成功才记录活跃的工作流映射
     if (activeWorkflows) {
-      activeWorkflows.set(agentName, jobId);
-      console.log(`[Workflow] Registered active workflow: ${agentName} -> ${jobId} (step ${currentStepIndex})`);
+      activeWorkflows.set(agentName, job.id);
+      console.log(`[Workflow] Registered active workflow: ${agentName} -> ${job.id} (step ${stepIndex})`);
     }
-    console.log(`[Workflow] ExCard sent to ${gatewayAgentId}`);
 
-    // 向聊天界面发送消息发送成功的通知
-    const stepInfo = workflowSteps.length > 0 ? ` (第 ${currentStepIndex}/${workflowSteps.length} 步)` : '';
     sendSystemMessageToChat(job.id, 'message_sent', {
       title: '消息已发送',
-      message: `已将任务发送给 ${agentName}${stepInfo}`,
+      message: `已将第 ${stepIndex}/${allSteps.length} 步发送给 ${agentName}`,
       agentName: agentName,
-      currentStep: currentStepIndex,
-      totalSteps: workflowSteps.length
+      currentStep: stepIndex,
+      totalSteps: allSteps.length
     }, agentName);
 
   }).catch(err => {
     console.error('[Workflow] Send failed:', err.message);
-    // 发送失败时回滚 job 状态
-    try {
-      queryRun('UPDATE jobs SET status=? WHERE id=?', ['idle', job.id]);
-      console.log(`[Workflow] Rolled back job ${job.id} status to idle`);
-
-      sendSystemMessageToChat(job.id, 'message_failed', {
-        title: '消息发送失败',
-        message: `发送给 ${agentName} 的消息失败: ${err.message}`,
-        error: err.message
-      }, agentName);
-
-    } catch (rollbackErr) {
-      console.error('[Workflow] Failed to rollback job status:', rollbackErr.message);
-    }
+    handleWorkflowError(job.id, agentName, `发送失败: ${err.message}`);
   });
 }
 
 /**
- * 发送基本的 Job 信息给 Agent（没有 ExCard 的情况）
+ * 发送单个 Job 给 Agent（旧版兼容）
  */
-function sendJobToAgent(job, activeAdapters, agentName) {
-  console.log(`[Workflow] Sending job ${job.id} to Agent (no ExCard)`);
-
-  if (!agentName) {
-    agentName = job.agent;
-  }
-
-  if (!agentName) {
-    console.warn('[Workflow] No agent assigned to job');
-    return;
-  }
+function sendSingleJobToAgent(job, agentName) {
+  console.log(`[Workflow] Sending single job ${job.id} to Agent`);
 
   let adapterName, gatewayAgentId;
   if (agentName.includes(':')) {
@@ -327,6 +269,7 @@ function sendJobToAgent(job, activeAdapters, agentName) {
   const adapter = activeAdapters.get(adapterName);
   if (!adapter) {
     console.warn(`[Workflow] Adapter ${adapterName} not found`);
+    handleWorkflowError(job.id, agentName, `Adapter ${adapterName} 未找到`);
     return;
   }
 
@@ -335,72 +278,136 @@ function sendJobToAgent(job, activeAdapters, agentName) {
     messageContent += `\n\n工作描述：${job.description}`;
   }
 
+  const excardId = job.excard_id || job.excard;
+  if (excardId) {
+    try {
+      const excardMd = getExcardMd(excardId);
+      messageContent += `\n\n---\n\n完整 ExCard 模板参考：\n\n${excardMd}`;
+    } catch (e) {
+      console.warn('[Workflow] Failed to load ExCard:', e.message);
+    }
+  }
+
+  messageContent += `\n---\n\n完成后请按以下格式回复：\n\n`;
+  messageContent += `[WORKFLOW job-${job.id}]\nstatus: complete\nmessage: （简要说明完成情况）\n\n`;
+  messageContent += `如果出错，请回复：\n\n`;
+  messageContent += `[WORKFLOW job-${job.id}]\nstatus: error\nmessage: （错误说明）`;
+
   adapter.send(gatewayAgentId, {
     type: 'workflow_start',
     jobId: job.id,
     content: {
       title: job.title,
       description: job.description,
+      excardId: excardId,
       fullPrompt: messageContent
     }
   }).then(() => {
     if (activeWorkflows) {
       activeWorkflows.set(agentName, job.id);
     }
-    console.log(`[Workflow] Job sent to ${gatewayAgentId}`);
-
     sendSystemMessageToChat(job.id, 'message_sent', {
       title: '消息已发送',
       message: `已将任务发送给 ${agentName}`,
       agentName: agentName
     }, agentName);
-
   }).catch(err => {
     console.error('[Workflow] Send failed:', err.message);
-    try {
-      queryRun('UPDATE jobs SET status=? WHERE id=?', ['idle', job.id]);
-      sendSystemMessageToChat(job.id, 'message_failed', {
-        title: '消息发送失败',
-        message: `发送给 ${agentName} 的消息失败: ${err.message}`,
-        error: err.message
-      }, agentName);
-    } catch (rollbackErr) {
-      console.error('[Workflow] Failed to rollback job status:', rollbackErr.message);
-    }
+    handleWorkflowError(job.id, agentName, `发送失败: ${err.message}`);
   });
 }
 
 /**
- * 处理 Agent 的回复消息，推动工作流进度（支持多步骤）
+ * 处理工作流错误
  */
+function handleWorkflowError(jobId, agentName, errorMessage) {
+  try {
+    beginTransaction();
+    queryRun('UPDATE jobs SET status=? WHERE id=?', ['idle', jobId]);
+    queryRun('UPDATE workflow_state SET status=? WHERE job_id=?', ['error', jobId]);
+    commitTransaction();
+  } catch (e) {
+    console.error('[Workflow] Failed to update status:', e.message);
+    try { rollbackTransaction(); } catch (re) {}
+  }
+
+  if (activeWorkflows) {
+    activeWorkflows.delete(agentName);
+  }
+
+  sendSystemMessageToChat(jobId, 'workflow_error', {
+    title: '工作流出错',
+    message: errorMessage,
+    agentName: agentName
+  }, agentName);
+
+  broadcast('workflow_error', { jobId, error: errorMessage });
+}
+
+/**
+ * 处理 Agent 的回复消息，推动工作流进度
+ */
+/**
+ * 解析 Agent 工作流回复
+ * 格式: [WORKFLOW job-id step-id]
+ */
+function parseWorkflowReply(messageText) {
+  const text = messageText || '';
+
+  // 匹配工作流标记：
+  // [WORKFLOW]
+  // [WORKFLOW job-123]
+  // [WORKFLOW job-123 step=2]
+  // [WORKFLOW job-123 step-2]
+  const markerPattern = /\[WORKFLOW(?:\s+([^\]]*))?\]/;
+  const markerMatch = text.match(markerPattern);
+
+  if (!markerMatch) {
+    return { isWorkflow: false };
+  }
+
+  const result = { isWorkflow: true };
+
+  // 解析标记里的内容
+  const markerContent = markerMatch[1] || '';
+  if (markerContent) {
+    const jobMatch = markerContent.match(/job[-\s]?=?\s*['"]?([\w-]+)['"]?/i);
+    const stepMatch = markerContent.match(/step[-\s]?=?\s*['"]?([\w-]+)['"]?/i);
+
+    if (jobMatch) result.jobId = jobMatch[1];
+    if (stepMatch) result.stepId = stepMatch[1];
+  }
+
+  // 解析键值对
+  const keyValuePattern = /(\w+)\s*[=:]\s*"?([^"\n]+)"?/g;
+  let match;
+
+  while ((match = keyValuePattern.exec(text)) !== null) {
+    const key = match[1].toLowerCase();
+    const value = match[2].trim();
+    result[key] = value;
+  }
+
+  // 找 message（可能在后面多行）
+  const messageMatch = text.match(/message[=:]\s*([^\n]+(?:\n(?!\w+[=:])[^\n]+)*)/i);
+  if (messageMatch) {
+    result.message = messageMatch[1].trim();
+  }
+
+  return result;
+}
+
 function handleAgentReply(agentName, message, jobId) {
   try {
     console.log(`[Workflow] Handling reply from ${agentName} for job ${jobId}`);
 
-    if (!agentName) {
-      console.warn('[Workflow] Missing agentName in handleAgentReply');
-      return { handled: false, action: 'none', error: 'Missing agentName' };
-    }
-
-    if (!jobId) {
-      console.warn('[Workflow] Missing jobId in handleAgentReply');
-      return { handled: false, action: 'none', error: 'Missing jobId' };
+    if (!agentName || !jobId) {
+      return { handled: false, action: 'none', error: 'Missing params' };
     }
 
     const job = getJob(jobId);
-    if (!job) {
-      console.warn(`[Workflow] Job ${jobId} not found`);
-      if (activeWorkflows) {
-        activeWorkflows.delete(agentName);
-      }
-      return { handled: false, action: 'none', error: 'Job not found' };
-    }
-
-    if (job.status === 'done') {
-      console.log(`[Workflow] Job ${jobId} already completed, ignoring`);
-      if (activeWorkflows) {
-        activeWorkflows.delete(agentName);
-      }
+    if (!job || job.status === 'done') {
+      if (activeWorkflows) activeWorkflows.delete(agentName);
       return { handled: false, action: 'none' };
     }
 
@@ -413,80 +420,145 @@ function handleAgentReply(agentName, message, jobId) {
       agentName: agentName
     }, agentName);
 
-    const isComplete = messageText.includes('完成') ||
-                       messageText.includes('workflow_complete') ||
-                       messageText.includes('done') ||
-                       messageText.includes('step_complete') ||
-                       (message.type === 'workflow_complete') ||
-                       (message.type === 'step_complete');
+    const workflowReply = parseWorkflowReply(messageText);
+    if (!workflowReply.isWorkflow) {
+      console.log(`[Workflow] Not a workflow update message, continuing`);
+      return { handled: false, action: 'none' };
+    }
 
-    if (isComplete) {
-      console.log(`[Workflow] Agent ${agentName} completed step for job ${jobId}`);
+    console.log(`[Workflow] Parsed workflow reply:`, workflowReply);
 
-      // 获取当前 workflow 状态
-      const workflowState = queryGet('SELECT * FROM workflow_state WHERE job_id = ?', [jobId]);
-      const currentStep = workflowState?.current_step || 0;
+    // 验证 jobId 是否匹配
+    if (workflowReply.jobId && workflowReply.jobId !== jobId) {
+      console.log(`[Workflow] Job ID mismatch: reply has ${workflowReply.jobId} != expected ${jobId}`);
+      // 不匹配但继续，可能是其他 Job 的消息
+      return { handled: false, action: 'none' };
+    }
 
-      // 获取 ExCard 和 workflow 步骤
-      let excardId = job.excard_id || job.excard;
-      let workflowSteps = [];
-      if (excardId) {
-        try {
-          const excardData = getExcard(excardId);
-          workflowSteps = getWorkflowSteps(excardData);
-        } catch (e) {
-          // ignore
+    const status = (workflowReply.status || '').toLowerCase();
+    const isError = status === 'error' || status === 'failed' || status === 'failure';
+
+    if (isError) {
+      const errorMsg = workflowReply.message || 'Agent 报告了错误';
+      console.log(`[Workflow] Agent reported error for job ${jobId}: ${errorMsg}`);
+
+      // Update current step status to error
+      try {
+        const workflowState = queryGet('SELECT * FROM workflow_state WHERE job_id = ?', [jobId]);
+        const currentStep = workflowState?.current_step || 0;
+        const jobSteps = getJobSteps(jobId);
+        if (jobSteps && jobSteps[currentStep - 1]) {
+          updateStep(jobSteps[currentStep - 1].id, { status: 'error' });
         }
+      } catch (e) {
+        console.warn('[Workflow] Failed to update step status to error:', e.message);
       }
 
-      // 检查是否还有下一步
-      const hasNextStep = workflowSteps.length > 0 && currentStep < workflowSteps.length;
+      handleWorkflowError(jobId, agentName, errorMsg);
+      return { handled: true, action: 'error' };
+    }
 
-      if (hasNextStep) {
-        // 推进到下一步
-        const nextStep = currentStep + 1;
-        console.log(`[Workflow] Advancing to step ${nextStep}/${workflowSteps.length}`);
+    const isComplete = status === 'complete' || status === 'success' || status === 'done';
+    if (!isComplete) {
+      console.log(`[Workflow] Status '${status}' not marked as complete, continuing`);
+      return { handled: false, action: 'none' };
+    }
 
-        // 更新 workflow 状态
-        queryRun('UPDATE workflow_state SET current_step=? WHERE job_id=?', [nextStep, jobId]);
-        broadcast('workflow_step_advanced', { jobId, currentStep: nextStep, totalSteps: workflowSteps.length });
+    console.log(`[Workflow] Agent ${agentName} completed step for job ${jobId}`);
 
-        // 发送下一步到聊天界面
-        const nextStepData = workflowSteps[nextStep - 1];
-        sendSystemMessageToChat(jobId, 'workflow_step', {
-          title: '工作流推进',
-          message: `正在执行第 ${nextStep}/${workflowSteps.length} 步：${nextStepData.name}`,
-          currentStep: nextStep,
-          totalSteps: workflowSteps.length,
-          stepName: nextStepData.name,
-          stepDescription: nextStepData.description
-        }, agentName);
+    const workflowState = queryGet('SELECT * FROM workflow_state WHERE job_id = ?', [jobId]);
+    const currentStep = workflowState?.current_step || 0;
 
-        // 确定下一步的 agent
-        const nextAgentName = nextStepData.agent || agentName;
-
-        // 获取 activeAdapters - 这里需要从外部传入，暂时通过 require 解决
-        const activeAdapters = new Map(); // 注意：这里需要实际的 adapter 引用
-
-        // 重新发送 ExCard 给下一步的 agent
-        // 注意：这里需要 activeAdapters，需要在调用时传入
-        // 暂时先标记完成这一步，等待下一次调用
-
-        return { handled: true, action: 'advanced', nextStep };
-
-      } else {
-        // 所有步骤都完成了
-        console.log(`[Workflow] All steps completed for job ${jobId}`);
-        completeWorkflow(jobId, agentName);
-
-        if (activeWorkflows) {
-          activeWorkflows.delete(agentName);
-        }
-        return { handled: true, action: 'complete' };
+    // 验证 stepId 是否匹配（如果有）
+    if (workflowReply.stepId) {
+      const replyStep = parseInt(workflowReply.stepId, 10);
+      if (!isNaN(replyStep) && replyStep !== currentStep) {
+        console.log(`[Workflow] Step ID mismatch: reply has step ${replyStep} != current step ${currentStep}`);
+        // 如果不匹配，可能是过期的回复，不处理
+        return { handled: false, action: 'none' };
       }
     }
 
-    return { handled: false, action: 'none' };
+    const jobSteps = getJobSteps(jobId);
+    const hasSteps = jobSteps && jobSteps.length > 0;
+
+    // Mark current step as completed
+    if (hasSteps && jobSteps[currentStep - 1]) {
+      try {
+        updateStep(jobSteps[currentStep - 1].id, { status: 'completed' });
+      } catch (e) {
+        console.warn('[Workflow] Failed to update step status to completed:', e.message);
+      }
+    }
+
+    const hasNextStep = hasSteps ? currentStep < jobSteps.length : false;
+
+    if (hasNextStep) {
+      const nextStepIndex = currentStep + 1;
+      console.log(`[Workflow] Advancing to step ${nextStepIndex}/${jobSteps.length}`);
+
+      // 使用事务更新步骤状态
+      try {
+        beginTransaction();
+        // 标记当前步骤为完成
+        if (hasSteps && jobSteps[currentStep - 1]) {
+          updateStep(jobSteps[currentStep - 1].id, { status: 'completed' });
+        }
+        // 更新工作流状态到下一步
+        queryRun('UPDATE workflow_state SET current_step=? WHERE job_id=?', [nextStepIndex, jobId]);
+        commitTransaction();
+      } catch (txErr) {
+        rollbackTransaction();
+        console.error('[Workflow] Transaction failed while advancing step:', txErr.message);
+        handleWorkflowError(jobId, agentName, '工作流推进失败: ' + txErr.message);
+        return { handled: true, action: 'error', error: txErr.message };
+      }
+
+      broadcast('workflow_step_advanced', { jobId, currentStep: nextStepIndex, totalSteps: jobSteps.length });
+
+      sendSystemMessageToChat(jobId, 'workflow_step', {
+        title: '工作流推进',
+        message: `正在执行第 ${nextStepIndex}/${jobSteps.length} 步`,
+        currentStep: nextStepIndex,
+        totalSteps: jobSteps.length
+      }, agentName);
+
+      const nextStep = jobSteps[nextStepIndex - 1];
+      const nextAgentName = nextStep.agent || agentName;
+
+      // 清理旧的 agentName 的 activeWorkflows 记录
+      if (activeWorkflows && agentName !== nextAgentName) {
+        activeWorkflows.delete(agentName);
+        console.log(`[Workflow] Unregistered old agent: ${agentName} for job ${jobId}`);
+      }
+
+      sendJobStepToAgent(job, nextStep, nextStepIndex, jobSteps, nextAgentName);
+
+      return { handled: true, action: 'advanced', nextStep: nextStepIndex };
+
+    } else {
+      console.log(`[Workflow] All steps completed for job ${jobId}`);
+
+      // 使用事务完成工作流
+      try {
+        beginTransaction();
+        // 标记最后一步为完成
+        if (hasSteps && jobSteps[currentStep - 1]) {
+          updateStep(jobSteps[currentStep - 1].id, { status: 'completed' });
+        }
+        commitTransaction();
+      } catch (txErr) {
+        rollbackTransaction();
+        console.warn('[Workflow] Failed to mark final step complete:', txErr.message);
+      }
+
+      completeWorkflow(jobId, agentName);
+
+      if (activeWorkflows) {
+        activeWorkflows.delete(agentName);
+      }
+      return { handled: true, action: 'complete' };
+    }
 
   } catch (err) {
     console.error('[Workflow] Error in handleAgentReply:', err.message);
@@ -498,11 +570,20 @@ function handleAgentReply(agentName, message, jobId) {
 }
 
 function completeWorkflow(jobId, agentName = null) {
-  queryRun(
-    'UPDATE workflow_state SET status=?,completed_at=CURRENT_TIMESTAMP WHERE job_id=?',
-    ['completed', jobId]
-  );
-  queryRun('UPDATE jobs SET status=? WHERE id=?', ['done', jobId]);
+  try {
+    beginTransaction();
+    queryRun(
+      'UPDATE workflow_state SET status=?,completed_at=CURRENT_TIMESTAMP WHERE job_id=?',
+      ['completed', jobId]
+    );
+    queryRun('UPDATE jobs SET status=? WHERE id=?', ['done', jobId]);
+    commitTransaction();
+  } catch (e) {
+    console.error('[Workflow] Failed to mark complete:', e.message);
+    try { rollbackTransaction(); } catch (re) {}
+    return;
+  }
+
   broadcast('workflow_completed', { jobId });
   console.log(`[Workflow] Job ${jobId} marked as complete`);
 
@@ -519,19 +600,11 @@ function getWorkflowStatus(jobId) {
     return { jobId, status: 'idle', currentStep: 0, totalSteps: 0 };
   }
 
-  // 获取 ExCard 信息来计算总步骤
   let totalSteps = 0;
   const job = getJob(jobId);
   if (job) {
-    const excardId = job.excard_id || job.excard;
-    if (excardId) {
-      try {
-        const excardData = getExcard(excardId);
-        totalSteps = getWorkflowSteps(excardData).length;
-      } catch (e) {
-        // ignore
-      }
-    }
+    const jobSteps = getJobSteps(jobId);
+    totalSteps = (jobSteps && jobSteps.length > 0) ? jobSteps.length : 1;
   }
 
   return {
@@ -550,6 +623,8 @@ module.exports = {
   getWorkflowStatus,
   handleAgentReply,
   setActiveWorkflowsRef,
+  setActiveAdaptersRef,
   sendSystemMessageToChat,
-  getWorkflowSteps
+  getJobSteps,
+  parseWorkflowReply
 };

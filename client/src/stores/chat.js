@@ -79,12 +79,14 @@ export const useChatStore = defineStore('chat', () => {
       const sess = sessions.value.find(s => {
         if (s.type === 'p2p') {
           const sAgentPart = s.agentId.includes(':') ? s.agentId.split(':').pop() : s.agentId;
-          return s.agentId === msgAgent || sAgentPart === msgAgent;
+          const msgAgentPart = msgAgent.includes(':') ? msgAgent.split(':').pop() : msgAgent;
+          return s.agentId === msgAgent || sAgentPart === msgAgent || sAgentPart === msgAgentPart;
         }
         if (s.type === 'group') {
           return s.agentIds?.some(agentId => {
             const agentPart = agentId.includes(':') ? agentId.split(':').pop() : agentId;
-            return agentId === msgAgent || agentPart === msgAgent;
+            const msgAgentPart = msgAgent.includes(':') ? msgAgent.split(':').pop() : msgAgent;
+            return agentId === msgAgent || agentPart === msgAgent || agentPart === msgAgentPart;
           });
         }
         return false;
@@ -189,15 +191,15 @@ export const useChatStore = defineStore('chat', () => {
       });
     });
 
-    // 创建默认群聊
-    sessions.value.push({
-      id: 'group-dev',
-      type: 'group',
-      name: '开发群',
-      avatarUrl: null,
-      agentIds: agentList.map(a => a.id),
-      messages: [],
-    });
+    // 创建默认群聊（暂时隐藏）
+    // sessions.value.push({
+    //   id: 'group-dev',
+    //   type: 'group',
+    //   name: '开发群',
+    //   avatarUrl: null,
+    //   agentIds: agentList.map(a => a.id),
+    //   messages: [],
+    // });
 
     // 确保系统会话存在
     ensureSystemSession();
@@ -257,17 +259,19 @@ export const useChatStore = defineStore('chat', () => {
     try {
       if (sess.type === 'p2p') {
         await api.sendMessage(sess.agentId, text.trim(), 'chat');
-      } else {
-        await Promise.all(
-          sess.agentIds.map(async agId => {
-            const pureId = agId.includes(':') ? agId.split(':').pop() : agId;
-            const agent = agents.value.find(a => a.id === pureId || a.id === agId);
-            if (agent?.connected) {
-              await api.sendMessage(agId, `[群消息] ${text.trim()}`, 'chat');
-            }
-          })
-        );
       }
+      // 群聊功能暂时隐藏
+      // else {
+      //   await Promise.all(
+      //     sess.agentIds.map(async agId => {
+      //       const pureId = agId.includes(':') ? agId.split(':').pop() : agId;
+      //       const agent = agents.value.find(a => a.id === pureId || a.id === agId);
+      //       if (agent?.connected) {
+      //         await api.sendMessage(agId, `[群消息] ${text.trim()}`, 'chat');
+      //       }
+      //     })
+      //   );
+      // }
     } catch (err) {
       console.error('[Chat] sendMessage error:', err);
       sess.messages.push({
@@ -350,7 +354,7 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage,
     selectSession,
     activeSession,
-    addGroupSession,
+    // addGroupSession, // 群聊功能暂时隐藏
     ensureSystemSession,
     loadSessionHistory,
   };
