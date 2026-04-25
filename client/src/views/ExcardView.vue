@@ -82,8 +82,10 @@ const categories = [
 async function toggleSelect(ec) {
   if (store.selectedExcard?.id === ec?.id) {
     store.selectedExcard = null
+    isEditing.value = false
   } else {
     await store.selectExcard(ec)
+    await startEditExcard()
   }
 }
 
@@ -160,8 +162,43 @@ async function createExcard() {
   showCreateModal.value = false
 }
 
-function startEditExcard() {
-  editData.value = JSON.parse(JSON.stringify(store.selectedExcard))
+async function startEditExcard() {
+  // 从 Markdown 重新解析数据，确保内容一致
+  const API_BASE = window.location.origin.replace(/:\d+$/, ':4000')
+  try {
+    const mdRes = await fetch(`${API_BASE}/api/excards/${store.selectedExcard.id}/md`)
+    if (mdRes.ok) {
+      const mdData = await mdRes.json()
+      // 先使用 store 中的数据
+      editData.value = JSON.parse(JSON.stringify(store.selectedExcard))
+      // 然后尝试从 Markdown 解析最新数据
+      if (mdData.markdown) {
+        const parsed = parseExcardMd(mdData.markdown)
+        // 合并解析的数据
+        editData.value.name = parsed.name || editData.value.name
+        editData.value.description = parsed.description || editData.value.description
+        editData.value.category = parsed.category || editData.value.category
+        editData.value.agent = parsed.agent || editData.value.agent
+        editData.value.tags = parsed.tags?.length ? parsed.tags : editData.value.tags
+        editData.value.resources = parsed.resources?.length ? parsed.resources : editData.value.resources
+        editData.value.workflow = parsed.workflow?.length ? parsed.workflow : editData.value.workflow
+        if (parsed.conventions) {
+          editData.value.conventions = {
+            input: parsed.conventions.input || editData.value.conventions?.input || '',
+            output: parsed.conventions.output || editData.value.conventions?.output || '',
+            errorHandling: parsed.conventions.errorHandling || editData.value.conventions?.errorHandling || ''
+          }
+        }
+      }
+    } else {
+      // 如果获取 Markdown 失败，直接使用 store 中的数据
+      editData.value = JSON.parse(JSON.stringify(store.selectedExcard))
+    }
+  } catch (err) {
+    console.error('[ExcardView] 解析 Markdown 失败:', err)
+    editData.value = JSON.parse(JSON.stringify(store.selectedExcard))
+  }
+  // 确保字段存在
   if (!editData.value.conventions) editData.value.conventions = { input: '', output: '', errorHandling: '' }
   if (!editData.value.tags) editData.value.tags = []
   if (!editData.value.resources) editData.value.resources = []
@@ -174,6 +211,162 @@ function startEditExcard() {
   editNewTag.value = ''
   isEditing.value = true
   useMdEditor.value = false
+}
+
+// 简单的 ExCard Markdown 解析器（和后端保持一致）
+function parseExcardMd(mdContent) {
+  const excard = {
+    name: '',
+    description: '',
+    category: 'general',
+    agent: '',
+    tags: [],
+    resources: [],
+    workflow: [],
+    conventions: {
+      input: '',
+      output: '',
+      errorHandling: ''
+    }
+  }
+
+  const lines = mdContent.split('\n')
+  let currentSection = ''
+  let currentStep = null
+  let inFrontmatter = false
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    const rawLine = lines[i]
+
+    // 解析 Frontmatter (--- 开头)
+    if (line === '---') {
+      inFrontmatter = !inFrontmatter
+      continue
+    }
+
+    if (inFrontmatter) {
+      if (line.startsWith('name:')) excard.name = line.slice(5).trim()
+      if (line.startsWith('category:')) excard.category = line.slice(9).trim()
+      if (line.startsWith('agent:')) excard.agent = line.slice(6).trim()
+      if (line.startsWith('tags:')) {
+        excard.tags = line.slice(5).trim().split(',').map(t => t.trim()).filter(Boolean)
+      }
+      continue
+    }
+
+    // 解析 H1 标题作为名称
+    if (line.startsWith('# ')) {
+      if (!excard.name) excard.name = line.slice(2).trim()
+      continue
+    }
+
+    // 解析 H2 标题（支持中英文）
+    if (line.startsWith('## ')) {
+      const title = line.slice(3).trim().toLowerCase()
+      if (title.includes('resource') || title.includes('资源')) {
+        currentSection = 'resource dependencies'
+      } else if (title.includes('workflow') || title.includes('工作流') || title.includes('执行步骤') || title.includes('步骤')) {
+        currentSection = 'execution workflow'
+      } else if (title.includes('convention') || title.includes('约定') || title.includes('输出要求') || title.includes('执行约定')) {
+        currentSection = 'execution conventions'
+      } else if (title.includes('purpose') || title.includes('目的') || title.includes('描述') || title.includes('任务') || title.includes('卡片')) {
+        currentSection = 'description'
+      } else {
+        currentSection = title
+      }
+      continue
+    }
+
+    // description (H1 后面的文本，或者## 卡片目的/任务描述下面的内容)
+    if ((!currentSection || currentSection === 'description') && line && !line.startsWith('#')) {
+      if (excard.description) excard.description += '\n' + line
+      else excard.description = line
+      continue
+    }
+
+    // 解析各 section 内容
+    if (currentSection === 'resource dependencies') {
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        const resourceText = line.slice(2).trim()
+        excard.resources.push(resourceText)
+      }
+    }
+
+    if (currentSection === 'execution workflow') {
+      if (line.match(/^\d+\.\s/)) {
+        if (currentStep) excard.workflow.push(currentStep)
+        const stepMatch = line.match(/^(\d+)\.\s\*\*(.*?)\*\*(.*)$/)
+        if (stepMatch) {
+          currentStep = {
+            index: parseInt(stepMatch[1]),
+            name: stepMatch[2].trim(),
+            description: stepMatch[3].trim()
+          }
+        } else {
+          const simpleMatch = line.match(/^(\d+)\.\s(.*)$/)
+          currentStep = {
+            index: parseInt(simpleMatch[1]),
+            name: simpleMatch[2].trim(),
+            description: ''
+          }
+        }
+      } else if (currentStep && line) {
+        // 继续追加步骤描述
+        if (!line.toLowerCase().startsWith('agent:')) {
+          if (currentStep.description) currentStep.description += '\n' + rawLine.trim()
+          else currentStep.description = rawLine.trim()
+        }
+      }
+    }
+
+    if (currentSection === 'execution conventions') {
+      if (line.toLowerCase().startsWith('### input') || line.toLowerCase().startsWith('## input') ||
+          line.toLowerCase().includes('### 输入') || line.toLowerCase().includes('## 输入')) {
+        let j = i + 1
+        let content = ''
+        while (j < lines.length && (lines[j].trim() === '' || !lines[j].trim().startsWith('#'))) {
+          if (lines[j].trim()) {
+            content = content ? content + '\n' + lines[j].trim() : lines[j].trim()
+          }
+          j++
+        }
+        excard.conventions.input = content
+      } else if (line.toLowerCase().startsWith('### output') || line.toLowerCase().startsWith('## output') ||
+                 line.toLowerCase().includes('### 输出') || line.toLowerCase().includes('## 输出')) {
+        let j = i + 1
+        let content = ''
+        while (j < lines.length && (lines[j].trim() === '' || !lines[j].trim().startsWith('#'))) {
+          if (lines[j].trim()) {
+            content = content ? content + '\n' + lines[j].trim() : lines[j].trim()
+          }
+          j++
+        }
+        excard.conventions.output = content
+      } else if (line.toLowerCase().startsWith('### error') || line.toLowerCase().startsWith('## error') ||
+                 line.toLowerCase().includes('### 错误') || line.toLowerCase().includes('## 错误')) {
+        let j = i + 1
+        let content = ''
+        while (j < lines.length && (lines[j].trim() === '' || !lines[j].trim().startsWith('#'))) {
+          if (lines[j].trim()) {
+            content = content ? content + '\n' + lines[j].trim() : lines[j].trim()
+          }
+          j++
+        }
+        excard.conventions.errorHandling = content
+      }
+    } else if (currentSection === '输出要求') {
+      // 如果有单独的"输出要求"部分，把内容放到 output 约定中
+      if (!line.startsWith('#')) {
+        if (excard.conventions.output) excard.conventions.output += '\n' + line
+        else excard.conventions.output = line
+      }
+    }
+  }
+
+  if (currentStep) excard.workflow.push(currentStep)
+
+  return excard
 }
 
 async function saveEditExcard() {
@@ -264,36 +457,29 @@ function getCategoryLabel(category) {
       <div v-if="store.selectedExcard" class="w-[450px] flex flex-col bg-surface rounded-xl border border-border flex-shrink-0 overflow-hidden">
         <div class="flex justify-between items-center p-4 border-b border-border">
           <div class="flex items-center gap-2">
-            <template v-if="isEditing">
-              <button
-                @click="useMdEditor = false"
-                :class="[
-                  'px-2 py-1 text-xs rounded transition-all',
-                  !useMdEditor ? 'bg-accent text-white' : 'text-secondary hover:text-primary'
-                ]"
-              >
-                表单编辑
-              </button>
-              <button
-                @click="useMdEditor = true"
-                :class="[
-                  'px-2 py-1 text-xs rounded transition-all',
-                  useMdEditor ? 'bg-accent text-white' : 'text-secondary hover:text-primary'
-                ]"
-              >
-                Markdown
-              </button>
-            </template>
+            <button
+              @click="useMdEditor = false"
+              :class="[
+                'px-2 py-1 text-xs rounded transition-all',
+                !useMdEditor ? 'bg-accent text-white' : 'text-secondary hover:text-primary'
+              ]"
+            >
+              表单编辑
+            </button>
+            <button
+              @click="useMdEditor = true"
+              :class="[
+                'px-2 py-1 text-xs rounded transition-all',
+                useMdEditor ? 'bg-accent text-white' : 'text-secondary hover:text-primary'
+              ]"
+            >
+              Markdown
+            </button>
           </div>
           <div class="flex items-center gap-2">
-            <template v-if="isEditing">
-              <button @click="cancelEditExcard" class="px-3 py-1.5 text-xs text-secondary hover:text-primary">取消</button>
-              <button @click="saveEditExcard" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">保存</button>
-            </template>
-            <template v-else>
-              <button @click="startEditExcard" class="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-surface-raised text-secondary">编辑</button>
-              <button @click="deleteExcard" class="px-3 py-1.5 text-xs border border-red-200 text-red-500 rounded-lg hover:bg-red-50">删除</button>
-            </template>
+            <button @click="cancelEditExcard" class="px-3 py-1.5 text-xs text-secondary hover:text-primary">取消</button>
+            <button @click="saveEditExcard" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">保存</button>
+            <button @click="deleteExcard" class="px-3 py-1.5 text-xs border border-red-200 text-red-500 rounded-lg hover:bg-red-50">删除</button>
           </div>
         </div>
 
@@ -301,7 +487,7 @@ function getCategoryLabel(category) {
           <ExcardMdEditor v-model="store.selectedExcardMd" :readonly="false" />
         </div>
 
-        <template v-else-if="isEditing && !useMdEditor">
+        <template v-else>
           <div class="flex-1 overflow-y-auto p-4">
             <div class="text-xs text-muted font-mono mb-3">{{ selectedExcard.id }}</div>
             <div class="space-y-4">
@@ -403,94 +589,6 @@ function getCategoryLabel(category) {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </template>
-
-        <template v-else>
-          <div class="flex-1 overflow-y-auto p-4">
-            <div class="mb-4">
-              <div class="text-xs text-muted font-mono mb-1">{{ selectedExcard.id }}</div>
-              <h3 class="text-lg font-semibold text-primary">{{ selectedExcard.name }}</h3>
-              <p class="text-sm text-secondary mt-2">{{ selectedExcard.description || '暂无描述' }}</p>
-              <div class="flex flex-wrap gap-1.5 mt-3">
-                <span class="text-xs px-2 py-0.5 rounded bg-surface-raised text-secondary">{{ getCategoryLabel(selectedExcard.category) }}</span>
-                <span
-                  v-for="tag in (selectedExcard.tags || [])"
-                  :key="tag"
-                  class="px-2 py-0.5 rounded text-xs bg-accent/10 text-accent"
-                >
-                  {{ tag }}
-                </span>
-              </div>
-              <div v-if="selectedExcard.agent" class="mt-3 text-sm">
-                <span class="text-muted">绑定 Agent：</span>
-                <span class="font-medium text-primary">{{ selectedExcard.agent }}</span>
-              </div>
-            </div>
-
-            <div v-if="(selectedExcard.resources || []).length > 0" class="mb-5">
-              <h4 class="text-sm font-semibold text-primary mb-2 flex items-center gap-1">
-                <span>📦</span> 资源依赖
-              </h4>
-              <div class="space-y-1.5">
-                <div
-                  v-for="(res, idx) in selectedExcard.resources"
-                  :key="idx"
-                  class="text-sm p-2 bg-surface-raised rounded-lg"
-                >
-                  {{ res }}
-                </div>
-              </div>
-            </div>
-
-            <div v-if="(selectedExcard.workflow || []).length > 0" class="mb-5">
-              <h4 class="text-sm font-semibold text-primary mb-2 flex items-center gap-1">
-                <span>🔄</span> 执行工作流
-              </h4>
-              <div class="relative">
-                <div class="absolute left-3.5 top-0 bottom-0 w-px bg-border" />
-                <div class="space-y-2">
-                  <div
-                    v-for="(step, idx) in selectedExcard.workflow"
-                    :key="idx"
-                    class="flex items-start gap-3 relative"
-                  >
-                    <div class="w-7 h-7 rounded-full bg-accent flex items-center justify-center text-white text-xs font-bold flex-shrink-0 z-10">
-                      {{ step.index }}
-                    </div>
-                    <div class="flex-1 pt-0.5">
-                      <div class="text-sm font-medium text-primary">{{ step.name }}</div>
-                      <div class="text-xs text-muted mt-0.5">{{ step.description }}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="mb-5">
-              <h4 class="text-sm font-semibold text-primary mb-2 flex items-center gap-1">
-                <span>📋</span> 执行约定
-              </h4>
-              <div class="space-y-2">
-                <div class="text-sm">
-                  <div class="text-muted mb-1">输入约定</div>
-                  <div class="text-primary bg-surface-raised p-2 rounded-lg text-sm">{{ selectedExcard.conventions?.input || '—' }}</div>
-                </div>
-                <div class="text-sm">
-                  <div class="text-muted mb-1">输出约定</div>
-                  <div class="text-primary bg-surface-raised p-2 rounded-lg text-sm">{{ selectedExcard.conventions?.output || '—' }}</div>
-                </div>
-                <div class="text-sm">
-                  <div class="text-muted mb-1">错误处理</div>
-                  <div class="text-primary bg-surface-raised p-2 rounded-lg text-sm">{{ selectedExcard.conventions?.errorHandling || '—' }}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="text-xs text-muted border-t border-border pt-3 flex items-center justify-between">
-              <span>{{ selectedExcard.version || 'v1.0' }}</span>
-              <span>{{ selectedExcard.updatedAt || '' }}</span>
             </div>
           </div>
         </template>

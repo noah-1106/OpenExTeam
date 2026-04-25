@@ -255,8 +255,8 @@ Dashboard 会自动检测到这个格式并弹出确认框。
 
 在聊天输入框中输入斜杠命令可以告诉 Agent 做什么：
 
-- `/ec <需求>` - 让 Agent 帮忙创建 ExCard
-- `/job <需求>` - 让 Agent 帮忙创建工作（开发中）
+- \`/ec <需求>\` - 让 Agent 帮忙创建 ExCard
+- \`/ec-modify <card-id> <需求>\` - 让 Agent 帮忙修改已有 ExCard
 
 示例：
 \`\`\`
@@ -347,7 +347,7 @@ const renderedContent = computed(() => {
 </script>
 
 <template>
-  <div class="h-full flex gap-4">
+  <div class="flex gap-4 h-full">
     <!-- 左侧：文档列表 -->
     <div class="w-64 flex-shrink-0 overflow-y-auto">
       <div class="mb-4">
@@ -364,12 +364,12 @@ const renderedContent = computed(() => {
             selectedDoc?.id === doc.id
               ? 'bg-accent-dim border border-accent/30 shadow-xs'
               : 'hover:bg-surface-raised border border-transparent'
-          ]"
+            ]"
         >
           <div class="flex items-center gap-2 mb-1">
             <span
               :class="['px-1.5 py-0.5 rounded text-xs', getCategoryColor(doc.category)]"
-            >
+              >
               {{ doc.category }}
             </span>
           </div>
@@ -380,19 +380,22 @@ const renderedContent = computed(() => {
 
     <!-- 右侧：文档内容 -->
     <div class="flex-1 bg-surface rounded-xl border border-border-subtle overflow-hidden flex flex-col">
-      <div v-if="selectedDoc">
+      <div v-if="selectedDoc" class="flex flex-col h-full">
         <!-- 头部 -->
-        <div class="px-6 py-4 border-b border-border-subtle">
+        <div class="px-6 py-4 border-b border-border-subtle flex-shrink-0">
           <div class="text-xs text-muted mb-0.5">{{ selectedDoc.category }}</div>
           <h3 class="text-lg font-semibold text-primary">{{ selectedDoc.title }}</h3>
         </div>
         <!-- 内容 -->
-        <div class="flex-1 overflow-y-auto p-6" style="max-height: calc(100vh - 200px);">
+        <div class="flex-1 overflow-y-auto p-6">
           <div
             class="prose prose-sm max-w-none"
             v-html="renderedContent"
           ></div>
         </div>
+      </div>
+      <div v-else class="flex items-center justify-center h-full text-muted">
+        请选择一篇文档查看
       </div>
     </div>
   </div>

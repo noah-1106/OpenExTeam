@@ -5,6 +5,8 @@ const props = defineProps({
   show: { type: Boolean, required: true },
   agentId: { type: String, required: true },
   rawText: { type: String, required: true },
+  isModifyMode: { type: Boolean, default: false },
+  targetExcardId: { type: String, default: '' },
 })
 
 const emit = defineEmits(['close', 'create'])
@@ -30,6 +32,8 @@ function parseProposal(text) {
   let agentFromProposal = props.agentId
   let fullMarkdown = ''
 
+  console.log('[ExcardProposalModal] 开始解析:', text.substring(0, 200))
+
   // 先检查是否是 [EXCARD_PROPOSAL] 键值对格式
   let isKeyValueFormat = false
   // 再检查是否是 # EXCARD_PROPOSAL Markdown 标题格式
@@ -47,6 +51,8 @@ function parseProposal(text) {
     }
   }
 
+  console.log('[ExcardProposalModal] 格式检测:', { isKeyValueFormat, isMarkdownFormat })
+
   // 第二次扫描提取内容
   if (isKeyValueFormat) {
     for (let line of lines) {
@@ -54,7 +60,7 @@ function parseProposal(text) {
       if (trimmed.startsWith('[EXCARD_PROPOSAL]')) {
         continue
       }
-      if (trimmed.startsWith('markdown:')) {
+      if (trimmed.toLowerCase().startsWith('markdown:')) {
         inMarkdown = true
         continue
       }
@@ -63,7 +69,7 @@ function parseProposal(text) {
       } else {
         const colonIndex = trimmed.indexOf(':')
         if (colonIndex > 0) {
-          const key = trimmed.substring(0, colonIndex).trim()
+          const key = trimmed.substring(0, colonIndex).trim().toLowerCase()
           const value = trimmed.substring(colonIndex + 1).trim()
           if (key === 'name') nameFromProposal = value
           if (key === 'description') descFromProposal = value
@@ -72,6 +78,7 @@ function parseProposal(text) {
       }
     }
     fullMarkdown = markdownLines.join('\n').trim()
+    console.log('[ExcardProposalModal] 键值对格式解析结果:', { nameFromProposal, descFromProposal, markdownLength: fullMarkdown.length })
   } else if (isMarkdownFormat) {
     // 直接把整个内容作为 markdown
     fullMarkdown = text
@@ -98,20 +105,27 @@ function parseProposal(text) {
         }
         descFromProposal = descBuffer.join(' ').substring(0, 100)
       }
-      // 简单的默认命名
-      if (!nameFromProposal) {
-        nameFromProposal = 'new-excard-' + Date.now().toString(36)
-      }
-      if (!descFromProposal) {
-        descFromProposal = '通过 Agent 提案创建的 ExCard'
-      }
     }
-  } else {
-    // 未知格式，假设整个内容就是 markdown
-    fullMarkdown = text
+  }
+
+  // 设置默认值
+  if (!nameFromProposal) {
     nameFromProposal = 'new-excard-' + Date.now().toString(36)
+  }
+  if (!descFromProposal) {
     descFromProposal = '通过 Agent 提案创建的 ExCard'
   }
+  if (!fullMarkdown) {
+    // 如果没有提取到 markdown，尝试使用全部文本（去除头部）
+    const startIdx = text.indexOf('[EXCARD_PROPOSAL]')
+    if (startIdx >= 0) {
+      fullMarkdown = text.substring(startIdx + '[EXCARD_PROPOSAL]'.length).trim()
+    } else {
+      fullMarkdown = text
+    }
+  }
+
+  console.log('[ExcardProposalModal] 最终解析结果:', { nameFromProposal, descFromProposal, fullMarkdownLength: fullMarkdown.length })
 
   return {
     name: nameFromProposal,
@@ -156,7 +170,7 @@ function handleCreate() {
     return
   }
 
-  const id = generateId(form.value.name)
+  const id = props.isModifyMode ? props.targetExcardId : generateId(form.value.name)
   emit('create', {
     ...form.value,
     id,
@@ -173,19 +187,26 @@ function handleCreate() {
         <!-- Header -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
           <div>
-            <h3 class="font-semibold text-primary">创建 ExCard</h3>
-            <p class="text-xs text-muted mt-1">Agent 提议创建一个 ExCard，你可以修改后确认</p>
+            <h3 class="font-semibold text-primary">{{ props.isModifyMode ? '修改 ExCard' : '创建 ExCard' }}</h3>
+            <p class="text-xs text-muted mt-1">Agent 提议{{ props.isModifyMode ? '修改' : '创建' }}一个 ExCard，你可以修改后确认</p>
           </div>
           <button @click="handleClose" class="text-muted hover:text-primary text-xl leading-none">×</button>
         </div>
 
         <!-- Content -->
         <div class="flex-1 overflow-y-auto p-6 space-y-4">
-          <div>
+          <div v-if="!props.isModifyMode">
             <label class="block text-sm font-medium text-primary mb-1.5">ExCard 名称 *</label>
             <input v-model="form.name" type="text" placeholder="输入名称"
               class="w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
             />
+          </div>
+          <div v-else>
+            <label class="block text-sm font-medium text-primary mb-1.5">ExCard 名称 *</label>
+            <input v-model="form.name" type="text" placeholder="输入名称"
+              class="w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+            />
+            <p class="text-xs text-muted mt-1">正在修改: {{ props.targetExcardId }}</p>
           </div>
 
           <div>

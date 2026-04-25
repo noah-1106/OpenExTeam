@@ -20,6 +20,9 @@ const chatContainer = ref(null)
 const showProposalModal = ref(false)
 const proposalAgentId = ref('')
 const proposalText = ref('')
+const isModifyMode = ref(false) // 是否是修改模式
+const targetExcardId = ref('') // 要修改的 ExCard ID
+const processedMessages = ref(new Set()) // 跟踪已处理过的消息
 
 // 检测消息中是否有 ExCard 提议
 function checkForExcardProposal(msg) {
@@ -31,8 +34,24 @@ function checkForExcardProposal(msg) {
   return false
 }
 
+// 生成消息的唯一标识
+function getMessageId(msg) {
+  return `${msg.sender}-${msg.text}-${msg.time}`
+}
+
+// 关闭提议弹窗时清理状态
+function onProposalModalClose() {
+  showProposalModal.value = false
+  // 不清理 isModifyMode 和 targetExcardId，因为用户可能还在修改流程中
+  // 这些状态会在下次发送 /ec 或 /ec-modify 时重置
+}
+
 // 显示提议弹窗
 function showProposal(msg) {
+  const msgId = getMessageId(msg)
+  if (processedMessages.value.has(msgId)) {
+    return // 已经处理过这个消息，不再显示
+  }
   if (activeSession.value?.type === 'p2p') {
     proposalAgentId.value = activeSession.value.agentId
   } else if (msg.agentId) {
@@ -40,39 +59,110 @@ function showProposal(msg) {
   }
   proposalText.value = msg.text
   showProposalModal.value = true
+  processedMessages.value.add(msgId) // 标记为已处理
 }
 
-// 创建 ExCard
+// 创建或更新 ExCard
 async function handleCreateExcard(data) {
+  console.log('[Chat] 处理 ExCard，数据:', data, '是否修改模式:', isModifyMode.value)
   try {
-    // 先创建 ExCard
-    await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/excards`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: data.id,
-        name: data.name,
-        description: data.description,
-        agent: data.agent,
-      }),
-    })
+    const API_BASE = window.location.origin.replace(/:\d+$/, ':4000')
 
-    // 再更新 Markdown 内容
-    await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/excards/${data.id}/md`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        markdown: data.markdown,
-      }),
-    })
+    if (isModifyMode.value && targetExcardId.value) {
+      // 修改模式 - 更新现有卡片
+      console.log('[Chat] 修改模式，目标 ID:', targetExcardId.value)
 
-    // 刷新 ExCard 列表
-    await boardStore.fetchAll()
+      // 更新基础信息
+      const updateRes = await fetch(`${API_BASE}/api/excards/${targetExcardId.value}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.name,
+          description: data.description,
+          agent: data.agent,
+        }),
+      })
 
-    alert('ExCard 创建成功！')
+      if (!updateRes.ok) {
+        const errData = await updateRes.json()
+        throw new Error(errData.error || '更新失败')
+      }
+
+      console.log('[Chat] ExCard 基础信息更新成功')
+
+      // 更新 Markdown 内容
+      console.log('[Chat] 准备更新 Markdown，长度:', data.markdown?.length)
+      const mdRes = await fetch(`${API_BASE}/api/excards/${targetExcardId.value}/md`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          markdown: data.markdown,
+        }),
+      })
+
+      if (!mdRes.ok) {
+        const errData = await mdRes.json()
+        throw new Error(errData.error || '更新内容失败')
+      }
+
+      console.log('[Chat] ExCard Markdown 更新成功')
+
+      // 重置模式
+      isModifyMode.value = false
+      targetExcardId.value = ''
+
+      // 刷新 ExCard 列表
+      await boardStore.fetchAll()
+
+      alert('ExCard 更新成功！')
+    } else {
+      // 创建模式 - 新建卡片
+      // 先创建 ExCard
+      const createRes = await fetch(`${API_BASE}/api/excards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: data.id,
+          name: data.name,
+          description: data.description,
+          agent: data.agent,
+        }),
+      })
+
+      if (!createRes.ok) {
+        const errData = await createRes.json()
+        throw new Error(errData.error || '创建失败')
+      }
+
+      console.log('[Chat] ExCard 基础信息创建成功')
+
+      // 再更新 Markdown 内容
+      console.log('[Chat] 准备更新 Markdown，长度:', data.markdown?.length)
+      console.log('[Chat] Markdown 内容:', data.markdown?.substring(0, 300))
+
+      const mdRes = await fetch(`${API_BASE}/api/excards/${data.id}/md`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          markdown: data.markdown,
+        }),
+      })
+
+      if (!mdRes.ok) {
+        const errData = await mdRes.json()
+        throw new Error(errData.error || '更新内容失败')
+      }
+
+      console.log('[Chat] ExCard Markdown 更新成功')
+
+      // 刷新 ExCard 列表
+      await boardStore.fetchAll()
+
+      alert('ExCard 创建成功！')
+    }
   } catch (err) {
-    console.error('创建 ExCard 失败:', err)
-    alert('创建 ExCard 失败：' + err.message)
+    console.error('处理 ExCard 失败:', err)
+    alert('处理 ExCard 失败：' + err.message)
   }
 }
 
@@ -133,29 +223,144 @@ async function sendMessage() {
 
   try {
     // 检测斜杠命令，给 agent 明确的回复格式要求
-    let messageToSend = text
-    if (text.startsWith('/ec')) {
+    if (text.startsWith('/ec-modify')) {
+      // /ec-modify <card-id> <需求>
+      const parts = text.split(' ')
+      const cardId = parts[1] || ''
+      const userDemand = parts.slice(2).join(' ').trim()
+
+      if (!cardId) {
+        alert('请指定要修改的 ExCard ID，例如：/ec-modify ec-abc123 增加新步骤')
+        return
+      }
+
+      // 获取现有 ExCard 内容
+      const API_BASE = window.location.origin.replace(/:\d+$/, ':4000')
+      let existingContent = ''
+      try {
+        const ecRes = await fetch(`${API_BASE}/api/excards/${cardId}`)
+        if (ecRes.ok) {
+          const ecData = await ecRes.json()
+          const mdRes = await fetch(`${API_BASE}/api/excards/${cardId}/md`)
+          if (mdRes.ok) {
+            const mdData = await mdRes.json()
+            existingContent = mdData.markdown || ''
+          }
+        }
+      } catch (e) {
+        console.warn('获取现有 ExCard 失败:', e)
+      }
+
+      isModifyMode.value = true
+      targetExcardId.value = cardId
+
+      const actualMessage = `请帮我修改 ExCard [${cardId}]，修改需求：${userDemand}
+
+现有 ExCard 内容：
+${existingContent || '（无法获取现有内容）'}
+
+请严格按照以下格式回复修改后的提案：
+[EXCARD_PROPOSAL]
+name: 简短的卡片名称（如果不需要修改可以保持原名）
+description: 简要描述这个 ExCard 的用途
+agent: ${activeSession.value?.agentId || ''}
+markdown:
+# ExCard 标题
+
+## 卡片目的
+
+简述这个 ExCard 的用途
+
+## Resource Dependencies
+
+- 资源1
+- 资源2
+
+## Execution Workflow
+
+1. **第一步名称** — 第一步描述
+2. **第二步名称** — 第二步描述
+3. ...
+
+## Execution Conventions
+
+### Input
+输入格式要求
+
+### Output
+输出格式要求
+
+### Error Handling
+错误处理方式
+
+---
+
+请确保 markdown 部分是完整的修改后的 ExCard 内容。`
+
+      // 调用 sendMessage，用户只看到原始命令，实际发送的是带格式要求的消息
+      await chatStore.sendMessage(text, {
+        userVisibleText: text,
+        actualMessage: actualMessage
+      })
+    } else if (text.startsWith('/ec')) {
       // 提取用户需求，给 agent 明确的格式指令
       const userDemand = text.replace(/^\/ec\s*/, '').trim()
-      messageToSend = `/ec ${userDemand}
+      isModifyMode.value = false
+      targetExcardId.value = ''
 
-请务必用以下格式回复提案：
-# EXCARD_PROPOSAL
+      const actualMessage = `请帮我创建一个 ExCard，主题是：${userDemand}
 
-（在这里写完整的 ExCard Markdown 内容）
-
-或者使用：
+请严格按照以下格式回复：
 [EXCARD_PROPOSAL]
-name: ExCard名称
-description: 描述用途
-agent: <agent-id>
+name: 简短的卡片名称
+description: 简要描述这个 ExCard 的用途
+agent: ${activeSession.value?.agentId || ''}
 markdown:
-# ExCard标题
-## 任务描述
-...`
-    }
+# ExCard 标题
 
-    await chatStore.sendMessage(messageToSend)
+## 卡片目的
+
+简述这个 ExCard 的用途
+
+## Resource Dependencies
+
+- 资源1
+- 资源2
+
+## Execution Workflow
+
+1. **第一步名称** — 第一步描述
+2. **第二步名称** — 第二步描述
+3. ...
+
+## Execution Conventions
+
+### Input
+输入格式要求
+
+### Output
+输出格式要求
+
+### Error Handling
+错误处理方式
+
+描述期望的输出格式
+
+---
+
+请确保 markdown 部分是完整的 ExCard 内容，使用上面的格式或类似的结构化格式。`
+
+      // 调用 sendMessage，用户只看到原始的 /ec 命令，实际发送的是带格式要求的消息
+      await chatStore.sendMessage(text, {
+        userVisibleText: text,
+        actualMessage: actualMessage
+      })
+    } else {
+      // 普通消息直接发送
+      await chatStore.sendMessage(text)
+    }
+  } catch (err) {
+    console.error('发送消息失败:', err)
   } finally {
     typing.value = false
   }
@@ -171,11 +376,29 @@ function scrollToBottom() {
 }
 
 // 监听消息变化，检测 ExCard 提议
-watch(() => activeSession.value?.messages, (newMessages) => {
-  if (newMessages && newMessages.length > 0) {
-    const lastMsg = newMessages[newMessages.length - 1]
-    if (checkForExcardProposal(lastMsg)) {
-      showProposal(lastMsg)
+watch(() => activeSession.value?.messages, (newMessages, oldMessages) => {
+  if (!newMessages || newMessages.length === 0) return
+
+  const oldLen = oldMessages?.length || 0
+  const newLen = newMessages.length
+
+  // 1. 检查新增的消息
+  for (let i = oldLen; i < newLen; i++) {
+    const msg = newMessages[i]
+    if (checkForExcardProposal(msg)) {
+      showProposal(msg)
+    }
+  }
+
+  // 2. 检查所有现有消息是否有更新后包含了 ExCard 提议（处理流式更新）
+  // 只检查非用户发送的消息，且还没处理过的
+  for (let i = 0; i < newMessages.length; i++) {
+    const msg = newMessages[i]
+    const msgId = getMessageId(msg)
+    if (msg.sender !== 'user' &&
+        !processedMessages.value.has(msgId) &&
+        checkForExcardProposal(msg)) {
+      showProposal(msg)
     }
   }
 }, { deep: true })
@@ -424,7 +647,8 @@ function getStatusColor(agent) {
               style="min-height: 42px; max-height: 120px"
             />
             <div v-if="inputText.trim() === ''" class="absolute left-4 bottom-2.5 text-xs text-muted pointer-events-none">
-              <span class="mr-3 text-accent font-medium">/ec</span> 让 Agent 帮忙创建 ExCard
+              <span class="mr-3 text-accent font-medium">/ec</span> 创建 ExCard，
+              <span class="mx-1 text-accent font-medium">/ec-modify</span> 修改 ExCard
             </div>
           </div>
           <button
@@ -447,7 +671,9 @@ function getStatusColor(agent) {
       :show="showProposalModal"
       :agent-id="proposalAgentId"
       :raw-text="proposalText"
-      @close="showProposalModal = false"
+      :is-modify-mode="isModifyMode"
+      :target-excard-id="targetExcardId"
+      @close="onProposalModalClose"
       @create="handleCreateExcard"
     />
   </div>

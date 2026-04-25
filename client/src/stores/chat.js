@@ -165,6 +165,12 @@ export const useChatStore = defineStore('chat', () => {
     const existingSystemSess = sessions.value.find(s => s.id === 'system-notifications');
     const systemMessages = existingSystemSess?.messages || [];
 
+    // 保存现有所有会话的消息
+    const existingMessages = new Map();
+    sessions.value.forEach(sess => {
+      existingMessages.set(sess.id, sess.messages);
+    });
+
     // 清除现有会话，重新初始化
     sessions.value = [];
 
@@ -181,13 +187,15 @@ export const useChatStore = defineStore('chat', () => {
 
     // 为每个 Agent 创建私聊会话
     agentList.forEach(ag => {
+      const sessionId = `p2p-${ag.id}`;
+      const savedMessages = existingMessages.get(sessionId) || [];
       sessions.value.push({
-        id: `p2p-${ag.id}`,
+        id: sessionId,
         type: 'p2p',
         name: ag.name,
         avatarUrl: ag.avatarUrl || null,
         agentId: ag.id,
-        messages: [],
+        messages: savedMessages,
       });
     });
 
@@ -206,11 +214,18 @@ export const useChatStore = defineStore('chat', () => {
 
     // 默认选中第一个私聊（如果有），否则选中系统会话
     const firstP2p = sessions.value.find(s => s.type === 'p2p');
-    activeSessionId.value = firstP2p?.id || 'system-notifications';
+    if (!activeSessionId.value) {
+      activeSessionId.value = firstP2p?.id || 'system-notifications';
+    }
+
+    // 自动加载当前活跃会话的历史记录
+    if (activeSessionId.value) {
+      loadSessionHistory(activeSessionId.value);
+    }
   }
 
   // 发送消息
-  async function sendMessage(text) {
+  async function sendMessage(text, options = {}) {
     const sess = sessions.value.find(s => s.id === activeSessionId.value);
     if (!sess || !text.trim()) return;
 
@@ -224,13 +239,17 @@ export const useChatStore = defineStore('chat', () => {
       hour: '2-digit', minute: '2-digit'
     });
 
-    console.log('[Chat] Sending user message:', text);
-
     // 发送新消息前，清理该会话的所有流式跟踪状态
     streamingMessages.value.clear();
 
-    // 添加用户消息
-    sess.messages.push({ sender: 'user', text: text.trim(), time: timeStr });
+    // 添加用户消息（用户可见的文本）
+    const userVisibleText = options.userVisibleText || text.trim();
+    sess.messages.push({ sender: 'user', text: userVisibleText, time: timeStr });
+
+    // 实际发送的消息（可能包含额外的提示词）
+    const actualMessageToSend = options.actualMessage || text.trim();
+    console.log('[Chat] Sending user message (visible):', userVisibleText);
+    console.log('[Chat] Sending actual message:', actualMessageToSend);
 
     // 检查连接状态
     let hasConnectedAgent = false;
@@ -258,7 +277,7 @@ export const useChatStore = defineStore('chat', () => {
     // 调用 API
     try {
       if (sess.type === 'p2p') {
-        await api.sendMessage(sess.agentId, text.trim(), 'chat');
+        await api.sendMessage(sess.agentId, actualMessageToSend, 'chat');
       }
       // 群聊功能暂时隐藏
       // else {

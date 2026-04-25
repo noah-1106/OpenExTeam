@@ -62,9 +62,20 @@ function parseExcardMd(mdContent) {
       continue
     }
 
-    // 解析 H2 标题
+    // 解析 H2 标题（支持中英文）
     if (line.startsWith('## ')) {
-      currentSection = line.slice(3).trim().toLowerCase()
+      const title = line.slice(3).trim().toLowerCase()
+      if (title.includes('resource') || title.includes('资源')) {
+        currentSection = 'resource dependencies'
+      } else if (title.includes('workflow') || title.includes('工作流') || title.includes('执行步骤') || title.includes('步骤')) {
+        currentSection = 'execution workflow'
+      } else if (title.includes('convention') || title.includes('约定') || title.includes('输出要求') || title.includes('执行约定')) {
+        currentSection = 'execution conventions'
+      } else if (title.includes('purpose') || title.includes('目的') || title.includes('描述') || title.includes('任务')) {
+        currentSection = 'description'
+      } else {
+        currentSection = title
+      }
       continue
     }
 
@@ -111,7 +122,8 @@ function parseExcardMd(mdContent) {
     }
 
     if (currentSection === 'execution conventions') {
-      if (line.startsWith('### Input')) {
+      if (line.toLowerCase().startsWith('### input') || line.toLowerCase().startsWith('## input') ||
+          line.toLowerCase().includes('### 输入') || line.toLowerCase().includes('## 输入')) {
         let j = i + 1
         let content = ''
         while (j < lines.length && (lines[j].trim() === '' || !lines[j].trim().startsWith('#'))) {
@@ -121,8 +133,8 @@ function parseExcardMd(mdContent) {
           j++
         }
         excard.conventions.input = content
-      }
-      if (line.startsWith('### Output')) {
+      } else if (line.toLowerCase().startsWith('### output') || line.toLowerCase().startsWith('## output') ||
+                 line.toLowerCase().includes('### 输出') || line.toLowerCase().includes('## 输出')) {
         let j = i + 1
         let content = ''
         while (j < lines.length && (lines[j].trim() === '' || !lines[j].trim().startsWith('#'))) {
@@ -132,8 +144,8 @@ function parseExcardMd(mdContent) {
           j++
         }
         excard.conventions.output = content
-      }
-      if (line.startsWith('### Error Handling')) {
+      } else if (line.toLowerCase().startsWith('### error') || line.toLowerCase().startsWith('## error') ||
+                 line.toLowerCase().includes('### 错误') || line.toLowerCase().includes('## 错误')) {
         let j = i + 1
         let content = ''
         while (j < lines.length && (lines[j].trim() === '' || !lines[j].trim().startsWith('#'))) {
@@ -143,6 +155,12 @@ function parseExcardMd(mdContent) {
           j++
         }
         excard.conventions.errorHandling = content
+      }
+    } else if (currentSection === '输出要求' || currentSection.includes('输出要求')) {
+      // 如果有单独的"输出要求"部分，把内容放到 output 约定中
+      if (!line.startsWith('#')) {
+        if (excard.conventions.output) excard.conventions.output += '\n' + line
+        else excard.conventions.output = line
       }
     }
   }
@@ -171,7 +189,7 @@ ${excard.description || ''}
 
 ## Resource Dependencies
 
-${(excard.resources || []).map(r => `- ${r}`).join('\n')}
+${(excard.resources || []).length > 0 ? (excard.resources || []).map(r => `- ${r}`).join('\n') : '暂无'}
 
 ## Execution Workflow
 
@@ -186,13 +204,13 @@ ${(excard.resources || []).map(r => `- ${r}`).join('\n')}
   md += `## Execution Conventions
 
 ### Input
-${excard.conventions?.input || ''}
+${excard.conventions?.input || '-'}
 
 ### Output
-${excard.conventions?.output || ''}
+${excard.conventions?.output || '-'}
 
 ### Error Handling
-${excard.conventions?.errorHandling || ''}
+${excard.conventions?.errorHandling || '-'}
 `
 
   return md
