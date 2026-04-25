@@ -16,7 +16,7 @@ function setupConfigRoutes(app, activeAdapters, adapterConfigs, helpers) {
     res.json({ adapters: cfg.adapters || [] });
   });
 
-  app.post('/api/config/adapters', (req, res) => {
+  app.post('/api/config/adapters', async (req, res) => {
     const adapters = req.body.adapters || [];
 
     // 验证每个适配器配置
@@ -32,6 +32,12 @@ function setupConfigRoutes(app, activeAdapters, adapterConfigs, helpers) {
     }
 
     const cfg = loadConfig();
+    const oldAdapters = cfg.adapters || [];
+
+    // 找出 openclaw 适配器
+    const openclawAdapter = adapters.find(a => a.type === 'openclaw');
+
+    // 保存配置
     cfg.adapters = adapters;
     saveConfig(cfg);
 
@@ -44,11 +50,30 @@ function setupConfigRoutes(app, activeAdapters, adapterConfigs, helpers) {
       console.log(`[Config] Saved and updated ${cfg.adapters?.length || 0} adapter(s) in memory`);
     }
 
+    // 清理已删除的适配器
+    if (activeAdapters) {
+      const oldNames = new Set(oldAdapters.map(a => a.name));
+      const newNames = new Set(adapters.map(a => a.name));
+      for (const name of oldNames) {
+        if (!newNames.has(name) && activeAdapters.has(name)) {
+          console.log(`[Config] Adapter ${name} deleted, disconnecting...`);
+          const adapter = activeAdapters.get(name);
+          if (adapter && adapter.disconnect) {
+            await adapter.disconnect().catch(() => {});
+          }
+          activeAdapters.delete(name);
+        }
+      }
+    }
+
+    // 直接返回成功，配对信息通过 SSE 推送
+    // 用户可以在前端手动点击连接按钮
     res.json({ success: true });
   });
 
   app.post('/api/adapter/test', async (req, res) => {
     let { type, url, token } = req.body;
+    console.log(`[Adapter Test] Full request body:`, JSON.stringify(req.body));
     try {
       // 自动修复 URL 格式 - 仅 OpenClaw 需要 WebSocket
       if (type === 'openclaw' && url) {
@@ -81,6 +106,7 @@ function setupConfigRoutes(app, activeAdapters, adapterConfigs, helpers) {
       }
 
       console.log(`[Adapter Test] Testing ${type} connection${url ? ' to ' + url : ''}`);
+      console.log(`[Adapter Test] Token received: ${token ? token.substring(0, 10) + '...' : 'NONE'}`);
 
       const a = createAdapter(type, { name: 'test', url, token });
 
@@ -89,11 +115,11 @@ function setupConfigRoutes(app, activeAdapters, adapterConfigs, helpers) {
       let connectDone = false;
       let responseSent = false;
 
-      // 5秒超时
+      // 120秒超时
       const timeout = setTimeout(() => {
         if (!connectDone && !responseSent) {
           testTimedOut = true;
-          console.log('[Adapter Test] Test timed out after 5 seconds');
+          console.log('[Adapter Test] Test timed out after 120 seconds');
           a.disconnect().catch(() => {});
           responseSent = true;
           res.json({
@@ -101,7 +127,7 @@ function setupConfigRoutes(app, activeAdapters, adapterConfigs, helpers) {
             message: '连接超时，请检查 URL 是否正确，或直接保存配置让后台尝试连接'
           });
         }
-      }, 5000);
+      }, 120000);
 
       const sendPairingResponse = async (info) => {
         if (responseSent) return;

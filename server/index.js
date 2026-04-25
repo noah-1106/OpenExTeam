@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
-const activeAdapters = new Map();
+const activeAdapters = new Map(); // 存储已创建的适配器实例（即使断开也保留）
 const activeWorkflows = new Map(); // agentName → jobId 映射，用于跟踪活跃的工作流
 
 // 后台监控和重连管理
@@ -55,6 +55,21 @@ async function initAdapters() {
 
 async function initSingleAdapter(ac) {
   try {
+    // 如果实例已存在，直接调用 connect
+    if (activeAdapters.has(ac.name)) {
+      console.log(`[Adapter] ${ac.name} already exists, reusing instance...`);
+      const adapter = activeAdapters.get(ac.name);
+      // 检查是否已连接
+      const isConnected = await adapter.healthCheck().catch(() => false);
+      if (isConnected) {
+        console.log(`[Adapter] ${ac.name} already connected`);
+        return;
+      }
+      // 未连接，调用 connect
+      await adapter.connect();
+      return;
+    }
+
     // 自动修复 URL 格式
     let url = ac.url;
     if (url && url.startsWith('http://')) {
@@ -101,8 +116,19 @@ async function initSingleAdapter(ac) {
     // 监听断开连接事件 - 适配器内部已处理重连
     adapter.on('disconnected', () => {
       console.log(`[Adapter] ${ac.name} disconnected`);
-      activeAdapters.delete(ac.name);
+      // 注意：不要从 activeAdapters 移除，这样可以复用实例
       broadcast('adapter_disconnected', { name: ac.name });
+    });
+
+    // 监听配对相关事件
+    adapter.on('pairing_required', (data) => {
+      console.log(`[Adapter] ${ac.name} needs pairing:`, data.message);
+      broadcast('adapter_pairing_required', { name: ac.name, ...data });
+    });
+
+    adapter.on('pairing_complete', (data) => {
+      console.log(`[Adapter] ${ac.name} pairing complete`);
+      broadcast('adapter_pairing_complete', { name: ac.name, ...data });
     });
 
     // 监听错误事件（防止崩溃）
@@ -112,7 +138,6 @@ async function initSingleAdapter(ac) {
 
     await adapter.connect();
     activeAdapters.set(ac.name, adapter);
-    broadcast('adapter_connected', { name: ac.name });
     console.log(`[Adapter] Connected: ${ac.name}`);
   } catch (err) {
     console.error(`[Adapter] ${ac.name}: ${err.message}`);
@@ -135,11 +160,6 @@ async function connectAdapterManual(name) {
     throw new Error(`Adapter config not found: ${name}`);
   }
 
-  if (activeAdapters.has(name)) {
-    console.log(`[Connect] Adapter ${name} already connected`);
-    return { success: true, message: 'Already connected' };
-  }
-
   console.log(`[Connect] Starting connection for ${name} to ${config.url}`);
   await initSingleAdapter(config);
   return { success: true, message: 'Connected' };
@@ -149,8 +169,6 @@ async function connectAdapterManual(name) {
 async function disconnectAdapterManual(name) {
   const adapter = activeAdapters.get(name);
   if (adapter) {
-    // 从 activeAdapters 中移除，防止自动重连
-    activeAdapters.delete(name);
     // 标记为不启用，防止 auto-reconnect
     const config = adapterConfigs.get(name);
     if (config) {

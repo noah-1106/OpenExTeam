@@ -38,14 +38,6 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 保存适配器配置
   async function saveAdapter(config) {
-    // 先调用 test（可选，不阻止保存）
-    try {
-      await testAdapter(config);
-    } catch (e) {
-      // 测试失败不阻止保存
-      console.log('[Settings] Test failed but proceeding to save:', e.message);
-    }
-
     // 保存到配置
     const newConfig = { ...config, enabled: true };
     const res = await fetch(`${API_BASE}/api/config/adapters`, {
@@ -54,16 +46,19 @@ export const useSettingsStore = defineStore('settings', () => {
       body: JSON.stringify({ adapters: [...adapters.value, newConfig] }),
     });
     if (!res.ok) throw new Error('保存失败');
+    const result = await res.json();
     await fetchAdapters(); // 重新加载
-    return true;
+    return result;
   }
 
   // 删除适配器
   async function deleteAdapter(conn) {
-    // 根据 id 或 name 过滤
-    const filtered = adapters.value.filter(a =>
-      (conn.id && a.id !== conn.id) || (conn.name && a.name !== conn.name)
-    );
+    // 根据 id 或 name 过滤，匹配到的就删除
+    const filtered = adapters.value.filter(a => {
+      const idMatch = conn.id && a.id === conn.id;
+      const nameMatch = conn.name && a.name === conn.name;
+      return !idMatch && !nameMatch;
+    });
     const res = await fetch(`${API_BASE}/api/config/adapters`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

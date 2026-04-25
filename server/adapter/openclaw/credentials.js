@@ -126,7 +126,8 @@ class CredentialManager {
         deviceId: authData.deviceId,
         publicKey,
         privateKey,
-        privateKeyPem: privateKey
+        privateKeyPem: privateKey,
+        deviceToken: authData.tokens.operator.token
       };
     } catch (err) {
       console.warn(`[OpenClaw:${this.adapterName}] Failed to load paired device:`, err.message);

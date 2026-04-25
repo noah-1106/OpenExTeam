@@ -6,6 +6,7 @@
 const WebSocket = require('ws');
 const EventEmitter = require('events');
 const crypto = require('crypto');
+const CredentialManager = require('./credentials');
 
 // 协议版本
 const PROTOCOL_VERSION = 3;
@@ -35,6 +36,7 @@ class ConnectionManager extends EventEmitter {
     this._connectResolve = null;
     this._connectReject = null;
     this._connectionTimer = null;
+    this._reconnectTimeout = null;
     this._pairingResolve = null;
     this._pairingReject = null;
   }
@@ -58,9 +60,14 @@ class ConnectionManager extends EventEmitter {
    * 断开连接
    */
   async disconnect() {
+    console.log(`[OpenClaw:${this.name}] Disconnecting and stopping reconnection...`);
     if (this._connectionTimer) {
       clearTimeout(this._connectionTimer);
       this._connectionTimer = null;
+    }
+    if (this._reconnectTimeout) {
+      clearTimeout(this._reconnectTimeout);
+      this._reconnectTimeout = null;
     }
     if (this.ws) {
       this.ws.close();
@@ -68,6 +75,7 @@ class ConnectionManager extends EventEmitter {
     }
     this.connected = false;
     this.ready = false;
+    this.reconnectAttempts = 0;
   }
 
   /**
@@ -114,8 +122,8 @@ class ConnectionManager extends EventEmitter {
         console.log(`[OpenClaw:${this.name}] WebSocket disconnected`);
         this.emit('disconnected');
 
-        // 如果是已配对状态，尝试重连
-        if (this.credentials.deviceToken && this.reconnectAttempts < this.maxReconnectAttempts) {
+        // 如果适配器启用，尝试重连（不管有没有配对）
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
           this._attemptReconnect();
         }
       });
@@ -171,7 +179,10 @@ class ConnectionManager extends EventEmitter {
   async _handleChallenge(payload) {
     const nonce = payload?.nonce || this.nonce || crypto.randomBytes(16).toString('hex');
     const signedAtMs = Date.now();
-    const token = this.credentials.deviceToken || this.gatewayToken || '';
+    // 只用用户填写的 gateway token
+    const token = this.gatewayToken || '';
+
+    console.log(`[OpenClaw:${this.name}] Token info - credentials.deviceToken: ${this.credentials.deviceToken ? 'SET' : 'NOT SET'}, gatewayToken: ${this.gatewayToken ? 'SET' : 'NOT SET'}, using token: ${token ? token.substring(0, 10) + '...' : 'NONE'}`);
 
     // 优先使用保存的权限范围
     const savedScopes = this.credentials.scopes;
@@ -179,7 +190,7 @@ class ConnectionManager extends EventEmitter {
 
     console.log(`[OpenClaw:${this.name}] Using scopes:`, scopes);
 
-    const signature = this.credentials.constructor.signDevicePayload({
+    const signature = CredentialManager.signDevicePayload({
       deviceId: this.credentials.deviceId,
       clientId: 'gateway-client',
       clientMode: 'backend',
@@ -306,7 +317,7 @@ class ConnectionManager extends EventEmitter {
     const token = this.credentials.deviceToken || this.gatewayToken || '';
     const scopes = this.credentials.getDefaultScopes();
 
-    const signature = this.credentials.constructor.signDevicePayload({
+    const signature = CredentialManager.signDevicePayload({
       deviceId: this.credentials.deviceId,
       clientId: 'cli',
       clientMode: 'cli',
@@ -320,9 +331,14 @@ class ConnectionManager extends EventEmitter {
       privateKeyPem: this.credentials.privateKeyPem
     });
 
+    // 发送配对请求给Gateway
+    this._sendDevicePairRequest();
+
+    // 立即显示提示，让用户去Gateway用list查看
     this.emit('pairing_required', {
       deviceId: this.credentials.deviceId,
-      message: `请在Gateway端执行: openclaw devices approve ${this.credentials.deviceId}`,
+      requestId: this.credentials.deviceId,
+      message: `请在Gateway端执行：openclaw devices list 查看请求，找到 Device ID 为 ${this.credentials.deviceId} 的那条，然后用 openclaw devices approve <requestId> 批准`,
       signature,
       nonce,
       signedAt: signedAtMs
@@ -333,8 +349,6 @@ class ConnectionManager extends EventEmitter {
     }
     this._connectResolve = null;
     this._connectReject = null;
-
-    this._sendDevicePairRequest();
   }
 
   /**
@@ -343,7 +357,7 @@ class ConnectionManager extends EventEmitter {
   _sendDevicePairRequest() {
     if (this.pairingRequested) {
       console.log(`[OpenClaw:${this.name}] Pairing already requested`);
-      return;
+      return null;
     }
     this.pairingRequested = true;
 
@@ -352,7 +366,7 @@ class ConnectionManager extends EventEmitter {
     const token = this.credentials.deviceToken || this.gatewayToken || '';
     const scopes = this.credentials.getDefaultScopes();
 
-    const signature = this.credentials.constructor.signDevicePayload({
+    const signature = CredentialManager.signDevicePayload({
       deviceId: this.credentials.deviceId,
       clientId: 'cli',
       clientMode: 'cli',
@@ -366,9 +380,10 @@ class ConnectionManager extends EventEmitter {
       privateKeyPem: this.credentials.privateKeyPem
     });
 
+    const requestId = this._nextId();
     const pairRequest = {
       type: 'req',
-      id: this._nextId(),
+      id: requestId,
       method: 'device.pair',
       params: {
         device: {
@@ -385,7 +400,8 @@ class ConnectionManager extends EventEmitter {
     };
 
     this._sendRaw(pairRequest);
-    console.log(`[OpenClaw:${this.name}] Sent pairing request for: ${this.credentials.deviceId}`);
+    console.log(`[OpenClaw:${this.name}] Sent pairing request for: ${this.credentials.deviceId}, requestId: ${requestId}`);
+    return requestId;
   }
 
   /**
@@ -403,14 +419,45 @@ class ConnectionManager extends EventEmitter {
           this._pairingReject = null;
         }
       } else {
+        // 拿到Gateway真正的Request ID！
         const requestId = msg.payload?.requestId || msg.payload?.id || this.credentials.deviceId;
         console.log(`[OpenClaw:${this.name}] Pairing pending, requestId: ${requestId}`);
 
+        const signedAtMs = Date.now();
+        const nonce = this.nonce || crypto.randomBytes(16).toString('hex');
+        const token = this.credentials.deviceToken || this.gatewayToken || '';
+        const scopes = this.credentials.getDefaultScopes();
+
+        const signature = CredentialManager.signDevicePayload({
+          deviceId: this.credentials.deviceId,
+          clientId: 'cli',
+          clientMode: 'cli',
+          role: 'operator',
+          scopes,
+          signedAtMs,
+          token,
+          nonce,
+          platform: 'linux',
+          deviceFamily: '',
+          privateKeyPem: this.credentials.privateKeyPem
+        });
+
+        // 发送真正的Request ID给前端！
         this.emit('pairing_required', {
           deviceId: this.credentials.deviceId,
           requestId,
-          message: `请在Gateway端执行: openclaw devices approve ${requestId}`
+          message: `请在Gateway端执行: openclaw devices approve ${requestId}`,
+          signature,
+          nonce,
+          signedAt: signedAtMs
         });
+
+        // 现在可以reject connect了，让重连逻辑接管
+        if (this._pairingReject) {
+          this._pairingReject(new Error('PAIRING_REQUIRED'));
+          this._pairingResolve = null;
+          this._pairingReject = null;
+        }
       }
     } else {
       const error = msg.payload?.error || msg.error;
@@ -513,7 +560,7 @@ class ConnectionManager extends EventEmitter {
   /**
    * 发送RPC请求
    */
-  async rpcCall(namespace, method, params = {}, timeoutMs = 30000) {
+  async rpcCall(namespace, method, params = {}, timeoutMs = 120000) {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.ready) {
         reject(new Error('WebSocket not ready'));
@@ -558,7 +605,7 @@ class ConnectionManager extends EventEmitter {
     this.reconnectAttempts++;
     const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 30000);
     console.log(`[OpenClaw:${this.name}] Reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
-    setTimeout(() => {
+    this._reconnectTimeout = setTimeout(() => {
       this.connect().catch(() => {});
     }, delay);
   }

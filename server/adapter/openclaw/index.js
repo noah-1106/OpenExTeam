@@ -15,6 +15,7 @@ class OpenClawAdapter extends EventEmitter {
     this.name = config.name || 'openclaw';
     this.url = config.url || 'ws://127.0.0.1:9999';
     this.gatewayToken = config.token || process.env.GATEWAY_TOKEN || '';
+    console.log(`[OpenClaw:${this.name}] Initialized with token: ${this.gatewayToken ? this.gatewayToken.substring(0, 10) + '...' : 'NONE'}`);
     this.maxReconnectAttempts = config.maxReconnectAttempts || 10000;
     this.reconnectDelay = config.reconnectDelay || 5000;
 
@@ -84,6 +85,8 @@ class OpenClawAdapter extends EventEmitter {
     if (this.connectionManager) {
       await this.connectionManager.disconnect();
     }
+    // 注意：不要清理事件监听器，因为还要复用实例！
+    // 事件监听器由 index.js 管理，只在创建实例时注册一次
   }
 
   /**
@@ -99,7 +102,7 @@ class OpenClawAdapter extends EventEmitter {
   async listAgents() {
     try {
       if (this.connectionManager?.connected && this.connectionManager?.ready) {
-        const result = await this.connectionManager.rpcCall('agents', 'list', {}, 5000);
+        const result = await this.connectionManager.rpcCall('agents', 'list', {}, 120000);
         if (result && Array.isArray(result.agents) && result.agents.length > 0) {
           const mappedAgents = result.agents.map(agent => ({
             id: agent.id,

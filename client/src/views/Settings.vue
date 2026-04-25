@@ -13,13 +13,13 @@ const frameworks = [
 const selectedFramework = ref('');
 const showAddForm = ref(false);
 const formData = ref({ name: '', url: '', token: '' });
-const testResult = ref(null);
-const testing = ref(false);
 const saving = ref(false);
-const resetting = ref(false);
 
 // 跟踪已连接的适配器
 const connectedAdapters = ref(new Set());
+
+// 跟踪每个适配器的配对信息
+const pairingInfo = ref({}); // { adapterName: { message: string, deviceId: string, countdown: number } }
 
 let eventSource = null;
 
@@ -46,6 +46,12 @@ onUnmounted(() => {
   if (eventSource) {
     eventSource.close();
   }
+  // 清除所有倒计时
+  Object.values(pairingInfo.value).forEach(info => {
+    if (info.countdownInterval) {
+      clearInterval(info.countdownInterval);
+    }
+  });
 });
 
 function setupSSE() {
@@ -55,11 +61,48 @@ function setupSSE() {
   eventSource.addEventListener('adapter_connected', (event) => {
     const data = JSON.parse(event.data);
     connectedAdapters.value.add(data.name);
+    // 清除配对信息
+    if (pairingInfo.value[data.name]) {
+      if (pairingInfo.value[data.name].countdownInterval) {
+        clearInterval(pairingInfo.value[data.name].countdownInterval);
+      }
+      delete pairingInfo.value[data.name];
+    }
   });
 
   eventSource.addEventListener('adapter_disconnected', (event) => {
     const data = JSON.parse(event.data);
     connectedAdapters.value.delete(data.name);
+  });
+
+  eventSource.addEventListener('adapter_pairing_required', (event) => {
+    const data = JSON.parse(event.data);
+    // 设置配对信息，包含120秒倒计时
+    const countdown = 120;
+    pairingInfo.value[data.name] = {
+      message: data.message,
+      deviceId: data.deviceId,
+      countdown: countdown,
+      countdownInterval: null
+    };
+    // 启动倒计时
+    pairingInfo.value[data.name].countdownInterval = setInterval(() => {
+      pairingInfo.value[data.name].countdown--;
+      if (pairingInfo.value[data.name].countdown <= 0) {
+        clearInterval(pairingInfo.value[data.name].countdownInterval);
+      }
+    }, 1000);
+  });
+
+  eventSource.addEventListener('adapter_pairing_complete', (event) => {
+    const data = JSON.parse(event.data);
+    // 清除配对信息
+    if (pairingInfo.value[data.name]) {
+      if (pairingInfo.value[data.name].countdownInterval) {
+        clearInterval(pairingInfo.value[data.name].countdownInterval);
+      }
+      delete pairingInfo.value[data.name];
+    }
   });
 
   eventSource.onerror = (error) => {
@@ -78,35 +121,6 @@ function selectFramework(fw) {
   selectedFramework.value = fw.id;
   showAddForm.value = true;
   formData.value = { name: '', url: '', token: '' };
-  testResult.value = null;
-}
-
-async function testConnection() {
-  // Hermes 不需要 URL 也能测试
-  if (selectedFramework.value !== 'hermes' && !formData.value.url) return;
-  testing.value = true;
-  testResult.value = null;
-  try {
-    const result = await settingsStore.testAdapter({
-      id: selectedFramework.value,
-      name: formData.value.name,
-      url: formData.value.url,
-      token: formData.value.token,
-    });
-
-    // 处理配对提示
-    if (result.pairing_required) {
-      testResult.value = 'pairing_required';
-      formData.value.pairingDeviceId = result.deviceId;
-      formData.value.pairingMessage = result.message;
-    } else {
-      testResult.value = result.success ? 'success' : 'failed';
-    }
-  } catch (err) {
-    testResult.value = 'failed';
-  } finally {
-    testing.value = false;
-  }
 }
 
 async function saveConnection() {
@@ -124,11 +138,11 @@ async function saveConnection() {
       url: formData.value.url,
       token: formData.value.token,
     });
+    // 保存成功后折叠表单并重置
     showAddForm.value = false;
     formData.value = { name: '', url: '', token: '' };
-    testResult.value = null;
     selectedFramework.value = '';
-    alert('保存成功！后端会自动尝试连接。如果需要配对，请查看后端日志。');
+    // 不需要 alert，配对信息会通过 SSE 显示在对应连接下面
   } catch (err) {
     alert('保存失败：' + err.message);
   } finally {
@@ -142,22 +156,16 @@ const disconnecting = ref({});
 async function deleteConnection(conn) {
   if (!confirm('确定删除此连接？')) return;
   try {
+    // 清除配对信息
+    if (pairingInfo.value[conn.name]) {
+      if (pairingInfo.value[conn.name].countdownInterval) {
+        clearInterval(pairingInfo.value[conn.name].countdownInterval);
+      }
+      delete pairingInfo.value[conn.name];
+    }
     await settingsStore.deleteAdapter(conn);
   } catch (err) {
     alert('删除失败：' + err.message);
-  }
-}
-
-async function resetCredentials(type) {
-  if (!confirm('确定重置设备凭证？这将清除当前的配对信息，需要重新配对。')) return;
-  resetting.value = true;
-  try {
-    const result = await settingsStore.resetCredentials(type);
-    alert(result.message || '凭证重置成功！');
-  } catch (err) {
-    alert('重置失败：' + err.message);
-  } finally {
-    resetting.value = false;
   }
 }
 
@@ -206,66 +214,74 @@ async function handleDisconnect(conn) {
         <div
           v-for="conn in settingsStore.adapters"
           :key="conn.id || conn.name"
-          class="px-4 py-4 flex items-center justify-between"
         >
-          <div class="flex items-center gap-4">
-            <div class="w-10 h-10 rounded-lg flex items-center justify-center text-lg" :class="
-              (conn.type === 'openclaw' || conn.id === 'openclaw') ? 'bg-blue-50' :
-              (conn.type === 'hermes' || conn.id === 'hermes') ? 'bg-purple-50' :
-              'bg-green-50'
-            ">
-              {{ (conn.type === 'openclaw' || conn.id === 'openclaw') ? '🦞' :
-                 (conn.type === 'hermes' || conn.id === 'hermes') ? '🐺' :
-                 '🦌' }}
+          <div class="px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+              <div class="w-10 h-10 rounded-lg flex items-center justify-center text-lg" :class="
+                (conn.type === 'openclaw' || conn.id === 'openclaw') ? 'bg-blue-50' :
+                (conn.type === 'hermes' || conn.id === 'hermes') ? 'bg-purple-50' :
+                'bg-green-50'
+              ">
+                {{ (conn.type === 'openclaw' || conn.id === 'openclaw') ? '🦞' :
+                   (conn.type === 'hermes' || conn.id === 'hermes') ? '🐺' : '🦌' }}
+              </div>
+              <div>
+                <h4 class="font-medium text-primary">{{ conn.name }}</h4>
+                <p class="text-sm text-muted">{{ conn.url }}</p>
+              </div>
             </div>
-            <div>
-              <h4 class="font-medium text-primary">{{ conn.name }}</h4>
-              <p class="text-sm text-muted">{{ conn.url }}</p>
+            <div class="flex items-center gap-4">
+              <div class="text-right">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full" :class="isAdapterConnected(conn) ? 'bg-green-500' : 'bg-gray-300'"></span>
+                  <span class="text-sm" :class="isAdapterConnected(conn) ? 'text-green-600' : 'text-muted'">
+                    {{ isAdapterConnected(conn) ? '已连接' : '未连接' }}
+                  </span>
+                </div>
+                <p class="text-xs text-muted mt-1">
+                  上次心跳: {{ conn.lastHeartbeat || '刚刚' }}
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button
+                  v-if="!isAdapterConnected(conn)"
+                  @click="handleConnect(conn)"
+                  :disabled="connecting[conn.name]"
+                  class="px-3 py-1.5 text-sm text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {{ connecting[conn.name] ? '连接中...' : '连接' }}
+                </button>
+                <button
+                  v-else
+                  @click="handleDisconnect(conn)"
+                  :disabled="disconnecting[conn.name]"
+                  class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {{ disconnecting[conn.name] ? '断开中...' : '断开' }}
+                </button>
+                <button
+                  @click="deleteConnection(conn)"
+                  class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  删除
+                </button>
+              </div>
             </div>
           </div>
-          <div class="flex items-center gap-4">
-            <div class="text-right">
-              <div class="flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full" :class="isAdapterConnected(conn) ? 'bg-green-500' : 'bg-gray-300'"></span>
-                <span class="text-sm" :class="isAdapterConnected(conn) ? 'text-green-600' : 'text-muted'">
-                  {{ isAdapterConnected(conn) ? '已连接' : '未连接' }}
-                </span>
+          <!-- 配对信息显示在对应连接下面 -->
+          <div v-if="pairingInfo[conn.name]" class="px-4 py-3 bg-yellow-50 border-t border-yellow-100">
+            <div class="flex items-start gap-3">
+              <span class="text-2xl">⏳</span>
+              <div class="flex-1">
+                <p class="text-yellow-800 font-medium">需要设备配对</p>
+                <p class="text-yellow-700 text-sm mt-1">
+                  <strong>配对命令：</strong>
+                  <code class="bg-yellow-100 px-1 rounded select-all">{{ pairingInfo[conn.name].message }}</code>
+                </p>
+                <p class="text-yellow-600 text-xs mt-2">
+                  倒计时：{{ pairingInfo[conn.name].countdown }}s
+                </p>
               </div>
-              <p class="text-xs text-muted mt-1">
-                上次心跳: {{ conn.lastHeartbeat || '刚刚' }}
-              </p>
-            </div>
-            <div class="flex items-center gap-2">
-              <button
-                v-if="!isAdapterConnected(conn)"
-                @click="handleConnect(conn)"
-                :disabled="connecting[conn.name]"
-                class="px-3 py-1.5 text-sm text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {{ connecting[conn.name] ? '连接中...' : '连接' }}
-              </button>
-              <button
-                v-else
-                @click="handleDisconnect(conn)"
-                :disabled="disconnecting[conn.name]"
-                class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {{ disconnecting[conn.name] ? '断开中...' : '断开' }}
-              </button>
-              <button
-                v-if="conn.type === 'openclaw' || conn.id === 'openclaw'"
-                @click="resetCredentials('openclaw')"
-                :disabled="resetting"
-                class="px-3 py-1.5 text-sm text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors disabled:opacity-50"
-              >
-                重置凭证
-              </button>
-              <button
-                @click="deleteConnection(conn)"
-                class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                删除
-              </button>
             </div>
           </div>
         </div>
@@ -314,8 +330,7 @@ async function handleDisconnect(conn) {
             <!-- OpenClaw 特有配置说明 -->
             <div v-if="selectedFramework === 'openclaw'" class="p-3 bg-blue-50 rounded-lg text-sm">
               <p class="text-blue-800">
-                <strong>连接方式：</strong>Dashboard 作为 <code class="bg-blue-100 px-1 rounded">Operator</code> 角色通过 WebSocket 连接到 OpenClaw Gateway。
-                首次连接需在 Gateway 端执行 <code class="bg-blue-100 px-1 rounded">openclaw devices approve &lt;requestId&gt;</code> 批准配对。
+                <strong>连接方式：</strong>Dashboard 作为 <code class="bg-blue-100 px-1 rounded">Operator</code> 角色通过 WebSocket 连接到 OpenClaw Gateway。首次连接需在 Gateway 端执行 <code class="bg-blue-100 px-1 rounded">openclaw devices approve &lt;requestId&gt;</code> 批准配对。
               </p>
             </div>
 
@@ -331,8 +346,7 @@ async function handleDisconnect(conn) {
             <!-- DeerFlow 特有配置说明 -->
             <div v-if="selectedFramework === 'deerflow'" class="p-3 bg-green-50 rounded-lg text-sm">
               <p class="text-green-800">
-                <strong>连接方式：</strong>通过 HTTP REST API 连接到 DeerFlow Gateway。
-                支持本地和远程连接。
+                <strong>连接方式：</strong>通过 HTTP REST API 连接到 DeerFlow Gateway。支持本地和远程连接。
               </p>
             </div>
 
@@ -374,9 +388,7 @@ async function handleDisconnect(conn) {
               />
               <p class="mt-1 text-xs text-muted">
                 <template v-if="selectedFramework === 'openclaw'">
-                  Gateway 配置文件中的 <code class="bg-surface-raised px-1 rounded">gateway.auth.token</code>。
-                  可通过 <code class="bg-surface-raised px-1 rounded">openclaw config get gateway.auth.token</code> 查看，
-                  未设置时用 <code class="bg-surface-raised px-1 rounded">openclaw config set gateway.auth.token "新token"</code> 配置
+                  Gateway 配置文件中的 <code class="bg-surface-raised px-1 rounded">gateway.auth.token</code>。可通过 <code class="bg-surface-raised px-1 rounded">openclaw config get gateway.auth.token</code> 查看，未设置时用 <code class="bg-surface-raised px-1 rounded">openclaw config set gateway.auth.token "新token"</code> 配置
                 </template>
                 <template v-else>
                   如 DeerFlow 配置了 API 认证，请在此填写 Token，否则留空
@@ -384,47 +396,7 @@ async function handleDisconnect(conn) {
               </p>
             </div>
 
-            <!-- Test Result -->
-            <div v-if="testResult" :class="[
-              'p-3 rounded-lg text-sm',
-              testResult === 'success' ? 'bg-green-50 text-green-700' :
-              testResult === 'pairing_required' ? 'bg-yellow-50 text-yellow-700' :
-              'bg-red-50 text-red-700'
-            ]">
-              <span v-if="testResult === 'success'">
-                ✅ 连接成功！
-                <template v-if="selectedFramework === 'openclaw'">Gateway 协议握手完成</template>
-                <template v-else-if="selectedFramework === 'deerflow'">DeerFlow API 连接正常</template>
-                <template v-else-if="selectedFramework === 'hermes'">Hermes CLI 可用</template>
-              </span>
-              <span v-else-if="testResult === 'pairing_required'">
-                ⏳ 需要设备配对
-                <br />
-                <strong>配对命令：</strong>
-                <code class="bg-yellow-100 px-1 rounded select-all">{{ formData.pairingMessage || `openclaw devices approve ${formData.pairingDeviceId}` }}</code>
-                <br />
-                <span class="text-xs">你可以直接保存配置，后端会持续尝试连接</span>
-              </span>
-              <span v-else>
-                ❌ 连接失败，请检查配置是否正确
-                <br v-if="selectedFramework === 'openclaw'" />
-                <span v-if="selectedFramework === 'openclaw'" class="text-xs">
-                  如果之前配对过，可能需要重置凭证后重试
-                </span>
-                <span v-else-if="selectedFramework === 'hermes'" class="text-xs">
-                  请确保已安装 Hermes: <code class="bg-purple-100 px-1 rounded">pip install hermes-agent</code>
-                </span>
-              </span>
-            </div>
-
             <div class="flex flex-wrap gap-3 pt-2">
-              <button
-                @click="testConnection"
-                :disabled="testing || (selectedFramework !== 'hermes' && !formData.url)"
-                class="px-4 py-2 text-sm font-medium text-primary bg-surface hover:bg-surface-raised rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {{ testing ? '测试中...' : '测试连接' }}
-              </button>
               <button
                 @click="saveConnection"
                 :disabled="!formData.name ||
@@ -432,15 +404,7 @@ async function handleDisconnect(conn) {
                           (selectedFramework === 'deerflow' && !formData.url)"
                 class="px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                保存
-              </button>
-              <button
-                v-if="selectedFramework === 'openclaw'"
-                @click="resetCredentials('openclaw')"
-                :disabled="resetting"
-                class="px-4 py-2 text-sm font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {{ resetting ? '重置中...' : '重置凭证' }}
+                {{ saving ? '保存中...' : '保存' }}
               </button>
             </div>
           </div>
