@@ -1,24 +1,36 @@
+# 依赖
 node_modules/
-dist/
-.vite/
-client/node_modules/
-client/dist/
-server/node_modules/
-playwright-report/
-test-results/
-*.log
-server.log
-.DS_Store
-*.db
-config.json
-server/config.json
+**/node_modules/
 
-# 临时测试文件
+# 构建产物
+dist/
+**/dist/
+.vite/
+
+# 数据库
+*.db
+
+# 日志
+*.log
+
+# 系统文件
+.DS_Store
+
+# 配置 (含凭证)
+config.json
+**/config.json
+.openexteam/
+.openclaw/
+
+# 测试
+test-results/
+playwright-report/
+e2e/
 test-*.js
 monitor-*.js
-e2e/
 
-# 配置和文档
+# 临时文档 (不纳入版本控制)
+P1-UPDATE.md
 CLAUDE.md
 SPEC.md
 PRD-OpenExTeam.md
@@ -29,29 +41,3 @@ API-RESEARCH.md
 CODE-REVIEW*.md
 .pi-debug-brief.md
 docs/
-
-# 凭证目录
-.openexteam/
-.openclaw/
-*.log
-server.log
-.DS_Store
-*.db
-config.json
-server/config.json
-
-# 配置和文档
-CLAUDE.md
-SPEC.md
-PRD-OpenExTeam.md
-REQUIREMENTS.md
-HANDOVER-*.md
-ARCHITECTURE-*.md
-API-RESEARCH.md
-.pi-debug-brief.md
-docs/
-
-# 凭证目录
-.openexteam/
-.openclaw/
-
