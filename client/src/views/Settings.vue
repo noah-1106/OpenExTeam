@@ -1,6 +1,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useSettingsStore } from '../stores/settings';
+import api from '../api/client';
+import { createSSEConnection } from '../api/sse.js';
 
 const settingsStore = useSettingsStore();
 
@@ -21,13 +23,11 @@ const connectedAdapters = ref(new Set());
 // 跟踪每个适配器的配对信息
 const pairingInfo = ref({}); // { adapterName: { message: string, deviceId: string, countdown: number } }
 
-let eventSource = null;
+let sseHandle = null;
 
 async function fetchConnectedAdapters() {
   try {
-    const API_BASE = window.location.origin.replace(/:\d+$/, ':4000');
-    const res = await fetch(`${API_BASE}/health`);
-    const data = await res.json();
+    const data = await api.health();
     if (data.adapters && Array.isArray(data.adapters)) {
       connectedAdapters.value = new Set(data.adapters);
     }
@@ -43,8 +43,9 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  if (eventSource) {
-    eventSource.close();
+  if (sseHandle) {
+    sseHandle.close();
+    sseHandle = null;
   }
   // 清除所有倒计时
   Object.values(pairingInfo.value).forEach(info => {
@@ -55,62 +56,54 @@ onUnmounted(() => {
 });
 
 function setupSSE() {
-  const API_BASE = window.location.origin.replace(/:\d+$/, ':4000');
-  eventSource = new EventSource(`${API_BASE}/api/events`);
+  if (sseHandle) sseHandle.close();
 
-  eventSource.addEventListener('adapter_connected', (event) => {
-    const data = JSON.parse(event.data);
-    connectedAdapters.value.add(data.name);
-    // 清除配对信息
-    if (pairingInfo.value[data.name]) {
-      if (pairingInfo.value[data.name].countdownInterval) {
-        clearInterval(pairingInfo.value[data.name].countdownInterval);
+  sseHandle = createSSEConnection({
+    adapter_connected: (event) => {
+      const data = JSON.parse(event.data);
+      connectedAdapters.value.add(data.name);
+      if (pairingInfo.value[data.name]) {
+        if (pairingInfo.value[data.name].countdownInterval) {
+          clearInterval(pairingInfo.value[data.name].countdownInterval);
+        }
+        delete pairingInfo.value[data.name];
       }
-      delete pairingInfo.value[data.name];
-    }
-  });
+    },
 
-  eventSource.addEventListener('adapter_disconnected', (event) => {
-    const data = JSON.parse(event.data);
-    connectedAdapters.value.delete(data.name);
-  });
+    adapter_disconnected: (event) => {
+      const data = JSON.parse(event.data);
+      connectedAdapters.value.delete(data.name);
+    },
 
-  eventSource.addEventListener('adapter_pairing_required', (event) => {
-    const data = JSON.parse(event.data);
-    // 设置配对信息，包含120秒倒计时
-    const countdown = 120;
-    pairingInfo.value[data.name] = {
-      message: data.message,
-      deviceId: data.deviceId,
-      countdown: countdown,
-      countdownInterval: null
-    };
-    // 启动倒计时
-    pairingInfo.value[data.name].countdownInterval = setInterval(() => {
-      pairingInfo.value[data.name].countdown--;
-      if (pairingInfo.value[data.name].countdown <= 0) {
-        clearInterval(pairingInfo.value[data.name].countdownInterval);
+    adapter_pairing_required: (event) => {
+      const data = JSON.parse(event.data);
+      const countdown = 120;
+      pairingInfo.value[data.name] = {
+        message: data.message,
+        deviceId: data.deviceId,
+        countdown: countdown,
+        countdownInterval: null
+      };
+      pairingInfo.value[data.name].countdownInterval = setInterval(() => {
+        pairingInfo.value[data.name].countdown--;
+        if (pairingInfo.value[data.name].countdown <= 0) {
+          clearInterval(pairingInfo.value[data.name].countdownInterval);
+        }
+      }, 1000);
+    },
+
+    adapter_pairing_complete: (event) => {
+      const data = JSON.parse(event.data);
+      if (pairingInfo.value[data.name]) {
+        if (pairingInfo.value[data.name].countdownInterval) {
+          clearInterval(pairingInfo.value[data.name].countdownInterval);
+        }
+        delete pairingInfo.value[data.name];
       }
-    }, 1000);
+    },
+  }, {
+    reconnectDelay: 5000,
   });
-
-  eventSource.addEventListener('adapter_pairing_complete', (event) => {
-    const data = JSON.parse(event.data);
-    // 清除配对信息
-    if (pairingInfo.value[data.name]) {
-      if (pairingInfo.value[data.name].countdownInterval) {
-        clearInterval(pairingInfo.value[data.name].countdownInterval);
-      }
-      delete pairingInfo.value[data.name];
-    }
-  });
-
-  eventSource.onerror = (error) => {
-    console.error('[Settings] SSE error:', error);
-    eventSource.close();
-    // 5秒后重试
-    setTimeout(setupSSE, 5000);
-  };
 }
 
 function isAdapterConnected(adapter) {

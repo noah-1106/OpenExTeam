@@ -13,6 +13,7 @@ const { queryAll, queryGet, queryRun, beginTransaction, commitTransaction, rollb
 const { broadcast } = require('../events/sse');
 const { getJob } = require('../models/job');
 const { getExcard, getExcardMd } = require('../storage/excards');
+const { WORKFLOW_COMPLETE_STATUSES } = require('../constants');
 const { getStepsForJob, updateStep } = require('../models/job_steps');
 const { v4: uuidv4 } = require('uuid');
 
@@ -458,7 +459,7 @@ function handleAgentReply(agentName, message, jobId) {
       return { handled: true, action: 'error' };
     }
 
-    const isComplete = status === 'complete' || status === 'success' || status === 'done';
+    const isComplete = WORKFLOW_COMPLETE_STATUSES.includes(status);
     if (!isComplete) {
       console.log(`[Workflow] Status '${status}' not marked as complete, continuing`);
       return { handled: false, action: 'none' };

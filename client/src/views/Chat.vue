@@ -2,7 +2,9 @@
 import { ref, computed, nextTick, watch } from 'vue'
 import { useChatStore } from '../stores/chat'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { useBoardStore } from '../stores/board'
+import api from '../api/client'
 import ExcardProposalModal from '../components/ExcardProposalModal.vue'
 import SlashCommandHelper from '../components/SlashCommandHelper.vue'
 
@@ -66,92 +68,36 @@ function showProposal(msg) {
 async function handleCreateExcard(data) {
   console.log('[Chat] 处理 ExCard，数据:', data, '是否修改模式:', isModifyMode.value)
   try {
-    const API_BASE = window.location.origin.replace(/:\d+$/, ':4000')
-
     if (isModifyMode.value && targetExcardId.value) {
       // 修改模式 - 更新现有卡片
       console.log('[Chat] 修改模式，目标 ID:', targetExcardId.value)
 
-      // 更新基础信息
-      const updateRes = await fetch(`${API_BASE}/api/excards/${targetExcardId.value}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: data.name,
-          description: data.description,
-          agent: data.agent,
-        }),
+      await api.updateExcard(targetExcardId.value, {
+        name: data.name,
+        description: data.description,
+        agent: data.agent,
       })
-
-      if (!updateRes.ok) {
-        const errData = await updateRes.json()
-        throw new Error(errData.error || '更新失败')
-      }
-
       console.log('[Chat] ExCard 基础信息更新成功')
 
-      // 更新 Markdown 内容
-      console.log('[Chat] 准备更新 Markdown，长度:', data.markdown?.length)
-      const mdRes = await fetch(`${API_BASE}/api/excards/${targetExcardId.value}/md`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          markdown: data.markdown,
-        }),
-      })
-
-      if (!mdRes.ok) {
-        const errData = await mdRes.json()
-        throw new Error(errData.error || '更新内容失败')
-      }
-
+      await api.updateExcardMd(targetExcardId.value, data.markdown)
       console.log('[Chat] ExCard Markdown 更新成功')
 
-      // 重置模式
       isModifyMode.value = false
       targetExcardId.value = ''
-
-      // 刷新 ExCard 列表
       await boardStore.fetchAll()
-
       alert('ExCard 更新成功！')
     } else {
       // 创建模式 - 新建卡片
-      // 先创建 ExCard
-      const createRes = await fetch(`${API_BASE}/api/excards`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: data.id,
-          name: data.name,
-          description: data.description,
-          agent: data.agent,
-        }),
+      await api.createExcard({
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        agent: data.agent,
       })
-
-      if (!createRes.ok) {
-        const errData = await createRes.json()
-        throw new Error(errData.error || '创建失败')
-      }
-
       console.log('[Chat] ExCard 基础信息创建成功')
 
-      // 再更新 Markdown 内容
-      console.log('[Chat] 准备更新 Markdown，长度:', data.markdown?.length)
-      console.log('[Chat] Markdown 内容:', data.markdown?.substring(0, 300))
-
-      const mdRes = await fetch(`${API_BASE}/api/excards/${data.id}/md`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          markdown: data.markdown,
-        }),
-      })
-
-      if (!mdRes.ok) {
-        const errData = await mdRes.json()
-        throw new Error(errData.error || '更新内容失败')
-      }
+      await api.updateExcardMd(data.id, data.markdown)
+      console.log('[Chat] ExCard Markdown 更新成功')
 
       console.log('[Chat] ExCard Markdown 更新成功')
 
@@ -172,7 +118,8 @@ const activeSession = computed(() => chatStore.activeSession())
 // 渲染 Markdown
 function renderMarkdown(text) {
   if (!text) return ''
-  return marked(text, { breaks: true, gfm: true })
+  const raw = marked(text, { breaks: true, gfm: true })
+  return DOMPurify.sanitize(raw)
 }
 
 // 检查当前会话是否有至少一个已连接的 agent
@@ -235,18 +182,10 @@ async function sendMessage() {
       }
 
       // 获取现有 ExCard 内容
-      const API_BASE = window.location.origin.replace(/:\d+$/, ':4000')
-      let existingContent = ''
+        let existingContent = ''
       try {
-        const ecRes = await fetch(`${API_BASE}/api/excards/${cardId}`)
-        if (ecRes.ok) {
-          const ecData = await ecRes.json()
-          const mdRes = await fetch(`${API_BASE}/api/excards/${cardId}/md`)
-          if (mdRes.ok) {
-            const mdData = await mdRes.json()
-            existingContent = mdData.markdown || ''
-          }
-        }
+        const mdData = await api.getExcardMd(cardId)
+        existingContent = mdData.markdown || ''
       } catch (e) {
         console.warn('获取现有 ExCard 失败:', e)
       }

@@ -4,12 +4,22 @@
  */
 
 const BASE = window.location.origin.replace(/:\d+$/, ':4000');
+const SSE_URL = `${BASE}/api/events`;
+
+export { BASE, SSE_URL };
+
+// API Key 鉴权：从 localStorage 读取，后端未启用时忽略
+function getApiKey() {
+  try { return localStorage.getItem('openexteam_api_key') || ''; } catch { return ''; }
+}
 
 async function request(method, path, body) {
   const opts = {
     method,
     headers: { 'Content-Type': 'application/json' },
   };
+  const apiKey = getApiKey();
+  if (apiKey) opts.headers['Authorization'] = `Bearer ${apiKey}`;
   if (body) opts.body = JSON.stringify(body);
 
   try {
@@ -45,10 +55,17 @@ async function request(method, path, body) {
 }
 
 const api = {
+  // --- Health ---
+  health: () => request('GET', '/health'),
+
   // --- Config & Adapter ---
   getConfig: () => request('GET', '/api/config'),
+  getAdapters: () => request('GET', '/api/config/adapters'),
   saveAdapters: (adapters) => request('POST', '/api/config/adapters', { adapters }),
   testAdapter: (type, url, token) => request('POST', '/api/adapter/test', { type, url, token }),
+  connectAdapter: (name) => request('POST', `/api/adapter/${encodeURIComponent(name)}/connect`),
+  disconnectAdapter: (name) => request('POST', `/api/adapter/${encodeURIComponent(name)}/disconnect`),
+  resetCredentials: (type) => request('POST', '/api/adapter/reset-credentials', { type }),
 
   // --- Agents ---
   getAgents: () => request('GET', '/api/agents'),
@@ -60,6 +77,9 @@ const api = {
   deleteJob: (id) => request('DELETE', `/api/jobs/${id}`),
   getJobExcard: (id) => request('GET', `/api/jobs/${id}/excard`),
   getJobSteps: (id) => request('GET', `/api/jobs/${id}/steps`),
+  createJobStep: (jobId, data) => request('POST', `/api/jobs/${jobId}/steps`, data),
+  updateJobStep: (stepId, data) => request('PATCH', `/api/job-steps/${stepId}`, data),
+  deleteJobStep: (stepId) => request('DELETE', `/api/job-steps/${stepId}`),
 
   // --- Tasks ---
   getTasks: (jobId) => request('GET', `/api/tasks${jobId ? `?jobId=${jobId}` : ''}`),
@@ -86,6 +106,9 @@ const api = {
     request('POST', '/api/message/send', { agentId, content, type, agentName }),
   getMessageHistory: (agentId, limit = 50) =>
     request('GET', `/api/messages/history?agentId=${encodeURIComponent(agentId)}&limit=${limit}`),
+
+  // --- Logs ---
+  getLogs: (limit = 50) => request('GET', `/api/logs?limit=${limit}`),
 };
 
 export default api;

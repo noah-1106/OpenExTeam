@@ -17,6 +17,10 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
+// API 鉴权：设置 OPENEXTEAM_API_KEY 环境变量启用，未设置则不受限
+const { apiKeyAuth } = require('./middleware/auth');
+app.use('/api', apiKeyAuth);
+
 const activeAdapters = new Map(); // 存储已创建的适配器实例（即使断开也保留）
 const activeWorkflows = new Map(); // agentName → jobId 映射，用于跟踪活跃的工作流
 

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import api from '../api/client'
+import api, { BASE as API_BASE } from '../api/client'
 
 const props = defineProps({
   jobs: { type: Array, required: true },
@@ -47,17 +47,13 @@ async function createJob() {
   // 创建步骤
   for (let i = 0; i < newSteps.value.length; i++) {
     const step = newSteps.value[i]
-    await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/jobs/${res.id}/steps`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        stepOrder: i,
-        stepType: step.type,
-        title: step.title,
-        description: step.description,
-        agent: step.agent,
-        excardId: step.excardId
-      })
+    await api.createJobStep(res.id, {
+      stepOrder: i,
+      stepType: step.type,
+      title: step.title,
+      description: step.description,
+      agent: step.agent,
+      excardId: step.excardId
     })
   }
 
@@ -110,8 +106,7 @@ async function openJobDetail(job) {
 
   // 加载步骤
   try {
-    const res = await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/jobs/${job.id}/steps`)
-    const data = await res.json()
+    const data = await api.getJobSteps(job.id)
     // 统一字段格式
     editSteps.value = (data.steps || []).map(step => ({
       ...step,
@@ -151,30 +146,22 @@ async function saveEditJob() {
 
     if (step.id) {
       // 更新现有步骤
-      await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/job-steps/${step.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: step.title,
-          description: step.description,
-          agent: step.agent,
-          stepType: step.step_type,
-          excardId: step.excard_id
-        })
+      await api.updateJobStep(step.id, {
+        title: step.title,
+        description: step.description,
+        agent: step.agent,
+        stepType: step.step_type,
+        excardId: step.excard_id
       })
     } else {
       // 创建新步骤
-      await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/jobs/${selectedJob.value.id}/steps`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: step.title,
-          description: step.description,
-          agent: step.agent,
-          stepType: step.step_type,
-          excardId: step.excard_id,
-          stepOrder: editSteps.value.indexOf(step)
-        })
+      await api.createJobStep(selectedJob.value.id, {
+        title: step.title,
+        description: step.description,
+        agent: step.agent,
+        stepType: step.step_type,
+        excardId: step.excard_id,
+        stepOrder: editSteps.value.indexOf(step)
       })
     }
   }
@@ -184,8 +171,7 @@ async function saveEditJob() {
 
   // 重新加载步骤
   try {
-    const res = await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/jobs/${selectedJob.value.id}/steps`)
-    const data = await res.json()
+    const data = await api.getJobSteps(selectedJob.value.id)
     editSteps.value = (data.steps || []).map(step => ({
       ...step,
       step_type: step.step_type || step.stepType,
@@ -226,9 +212,7 @@ function addEditStep(type) {
 function removeEditStep(index) {
   const step = editSteps.value[index]
   if (step.id && confirm('确定删除这个步骤？')) {
-    fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/job-steps/${step.id}`, {
-      method: 'DELETE'
-    })
+    api.deleteJobStep(step.id).catch(() => {})
   }
   editSteps.value.splice(index, 1)
 }
@@ -265,17 +249,12 @@ async function startWorkflow(job) {
       // 重新执行：重置步骤状态和工作状态
       try {
         // 先获取步骤
-        const res = await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/jobs/${job.id}/steps`)
-        const data = await res.json()
+        const data = await api.getJobSteps(job.id)
         const steps = data.steps || []
 
         // 重置所有步骤为pending
         for (const step of steps) {
-          await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/job-steps/${step.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'pending' })
-          })
+          await api.updateJobStep(step.id, { status: 'pending' })
         }
 
         // 重置工作状态为idle
@@ -291,8 +270,7 @@ async function startWorkflow(job) {
       // 创建为新工作
       try {
         // 先获取步骤
-        const res = await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/jobs/${job.id}/steps`)
-        const data = await res.json()
+        const data = await api.getJobSteps(job.id)
         const steps = data.steps || []
 
         // 创建新工作
@@ -306,17 +284,13 @@ async function startWorkflow(job) {
         // 复制步骤
         for (let i = 0; i < steps.length; i++) {
           const step = steps[i]
-          await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/jobs/${newJobRes.id}/steps`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              stepOrder: i,
-              stepType: step.step_type || step.stepType,
-              title: step.title,
-              description: step.description,
-              agent: step.agent,
-              excardId: step.excard_id || step.excardId
-            })
+          await api.createJobStep(newJobRes.id, {
+            stepOrder: i,
+            stepType: step.step_type || step.stepType,
+            title: step.title,
+            description: step.description,
+            agent: step.agent,
+            excardId: step.excard_id || step.excardId
           })
         }
 

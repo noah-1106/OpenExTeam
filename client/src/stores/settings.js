@@ -5,8 +5,7 @@
 
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-
-const API_BASE = window.location.origin.replace(/:\d+$/, ':4000');
+import api from '../api/client';
 
 export const useSettingsStore = defineStore('settings', () => {
   // 已保存的适配器列表
@@ -15,8 +14,7 @@ export const useSettingsStore = defineStore('settings', () => {
   // 加载所有适配器
   async function fetchAdapters() {
     try {
-      const res = await fetch(`${API_BASE}/api/config/adapters`);
-      const data = await res.json();
+      const data = await api.getAdapters();
       adapters.value = data.adapters || [];
     } catch (err) {
       console.error('[Settings] fetchAdapters error:', err);
@@ -26,88 +24,49 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 测试连接
   async function testAdapter(config) {
-    const res = await fetch(`${API_BASE}/api/adapter/test`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: config.type || config.id, url: config.url, token: config.token }),
-    });
-    if (!res.ok) return { success: false };
-    const data = await res.json();
-    return data; // 返回完整结果，包含 pairing_required 等信息
+    try {
+      return await api.testAdapter(config.type || config.id, config.url, config.token);
+    } catch {
+      return { success: false };
+    }
   }
 
   // 保存适配器配置
   async function saveAdapter(config) {
-    // 保存到配置
     const newConfig = { ...config, enabled: true };
-    const res = await fetch(`${API_BASE}/api/config/adapters`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adapters: [...adapters.value, newConfig] }),
-    });
-    if (!res.ok) throw new Error('保存失败');
-    const result = await res.json();
-    await fetchAdapters(); // 重新加载
+    const result = await api.saveAdapters([...adapters.value, newConfig]);
+    await fetchAdapters();
     return result;
   }
 
   // 删除适配器
   async function deleteAdapter(conn) {
-    // 根据 id 或 name 过滤，匹配到的就删除
     const filtered = adapters.value.filter(a => {
       const idMatch = conn.id && a.id === conn.id;
       const nameMatch = conn.name && a.name === conn.name;
       return !idMatch && !nameMatch;
     });
-    const res = await fetch(`${API_BASE}/api/config/adapters`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adapters: filtered }),
-    });
-    if (!res.ok) throw new Error('删除失败');
+    await api.saveAdapters(filtered);
     await fetchAdapters();
   }
 
   // 重置适配器凭证
   async function resetCredentials(type) {
-    const res = await fetch(`${API_BASE}/api/adapter/reset-credentials`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({ message: '重置失败' }));
-      throw new Error(data.message || '重置失败');
-    }
-    return await res.json();
+    return await api.resetCredentials(type);
   }
 
   // 手动连接适配器
   async function connectAdapter(name) {
-    const res = await fetch(`${API_BASE}/api/adapter/${name}/connect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({ message: '连接失败' }));
-      throw new Error(data.message || '连接失败');
-    }
+    const result = await api.connectAdapter(name);
     await fetchAdapters();
-    return await res.json();
+    return result;
   }
 
   // 手动断开适配器
   async function disconnectAdapter(name) {
-    const res = await fetch(`${API_BASE}/api/adapter/${name}/disconnect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({ message: '断开失败' }));
-      throw new Error(data.message || '断开失败');
-    }
+    const result = await api.disconnectAdapter(name);
     await fetchAdapters();
-    return await res.json();
+    return result;
   }
 
   return { adapters, fetchAdapters, testAdapter, saveAdapter, deleteAdapter, resetCredentials, connectAdapter, disconnectAdapter };

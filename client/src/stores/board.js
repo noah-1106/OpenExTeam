@@ -4,13 +4,11 @@
  */
 
 import { defineStore } from 'pinia';
-import { ref, onUnmounted } from 'vue';
+import { ref } from 'vue';
 import api from '../api/client';
+import { createSSEConnection } from '../api/sse';
 
-const SSE_URL = window.location.origin.replace(/:\d+$/, ':4000') + '/api/events';
-let es = null; // EventSource
-let reconnectTimer = null;
-const RECONNECT_DELAY = 3000;
+let sseHandle = null;
 
 export const useBoardStore = defineStore('board', () => {
   const jobs = ref([]);
@@ -36,36 +34,10 @@ export const useBoardStore = defineStore('board', () => {
   // SSE 实时推送
   // ========================
   function connectSSE() {
-    if (es) {
-      es.close();
-      es = null;
-    }
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
+    if (sseHandle) sseHandle.close();
 
-    try {
-      es = new EventSource(SSE_URL);
-
-      es.addEventListener('open', () => {
-        console.log('[BoardStore] SSE connected');
-        clearError();
-      });
-
-      es.addEventListener('error', (e) => {
-        console.warn('[BoardStore] SSE connection error, will reconnect:', e);
-        setError('实时连接断开，正在重连...');
-
-        // 重连逻辑
-        if (reconnectTimer) clearTimeout(reconnectTimer);
-        reconnectTimer = setTimeout(() => {
-          console.log('[BoardStore] Attempting to reconnect SSE...');
-          connectSSE();
-        }, RECONNECT_DELAY);
-      });
-
-      es.addEventListener('task_updated', (e) => {
+    sseHandle = createSSEConnection({
+      task_updated: (e) => {
         try {
           const d = JSON.parse(e.data);
           const t = tasks.value.find(t => t.id === d.taskId);
@@ -73,9 +45,9 @@ export const useBoardStore = defineStore('board', () => {
         } catch (err) {
           console.warn('[BoardStore] Failed to parse task_updated:', err);
         }
-      });
+      },
 
-      es.addEventListener('task_created', (e) => {
+      task_created: (e) => {
         try {
           const d = JSON.parse(e.data);
           tasks.value.push({
@@ -85,18 +57,18 @@ export const useBoardStore = defineStore('board', () => {
         } catch (err) {
           console.warn('[BoardStore] Failed to parse task_created:', err);
         }
-      });
+      },
 
-      es.addEventListener('task_deleted', (e) => {
+      task_deleted: (e) => {
         try {
           const d = JSON.parse(e.data);
           tasks.value = tasks.value.filter(t => t.id !== d.taskId);
         } catch (err) {
           console.warn('[BoardStore] Failed to parse task_deleted:', err);
         }
-      });
+      },
 
-      es.addEventListener('workflow_started', (e) => {
+      workflow_started: (e) => {
         try {
           const d = JSON.parse(e.data);
           const job = jobs.value.find(j => j.id === d.jobId);
@@ -104,9 +76,9 @@ export const useBoardStore = defineStore('board', () => {
         } catch (err) {
           console.warn('[BoardStore] Failed to parse workflow_started:', err);
         }
-      });
+      },
 
-      es.addEventListener('workflow_completed', (e) => {
+      workflow_completed: (e) => {
         try {
           const d = JSON.parse(e.data);
           const job = jobs.value.find(j => j.id === d.jobId);
@@ -114,19 +86,18 @@ export const useBoardStore = defineStore('board', () => {
         } catch (err) {
           console.warn('[BoardStore] Failed to parse workflow_completed:', err);
         }
-      });
+      },
 
-      es.addEventListener('workflow_step_advanced', (e) => {
+      workflow_step_advanced: (e) => {
         try {
           const d = JSON.parse(e.data);
           console.log('[BoardStore] Workflow step advanced:', d);
-          // 可以在这里更新 UI 显示当前步骤
         } catch (err) {
           console.warn('[BoardStore] Failed to parse workflow_step_advanced:', err);
         }
-      });
+      },
 
-      es.addEventListener('job_updated', (e) => {
+      job_updated: (e) => {
         try {
           const d = JSON.parse(e.data);
           const job = jobs.value.find(j => j.id === d.jobId);
@@ -134,17 +105,21 @@ export const useBoardStore = defineStore('board', () => {
         } catch (err) {
           console.warn('[BoardStore] Failed to parse job_updated:', err);
         }
-      });
+      },
 
-      es.addEventListener('adapter_connected', () => {
+      adapter_connected: () => {
         console.log('[BoardStore] Adapter connected, re-fetching agents');
         fetchAll();
-      });
-
-    } catch (err) {
-      console.error('[BoardStore] Failed to create SSE connection:', err);
-      setError('无法连接到服务器');
-    }
+      },
+    }, {
+      onOpen: () => {
+        console.log('[BoardStore] SSE connected');
+        clearError();
+      },
+      onError: () => {
+        setError('实时连接断开，正在重连...');
+      },
+    });
   }
 
   // 数据加载
@@ -159,12 +134,10 @@ export const useBoardStore = defineStore('board', () => {
         api.getAgents(),
         api.getExcards(),
       ]);
-      console.log('[BoardStore] fetchAll agentsRes:', agentsRes);
       jobs.value = jobsRes.jobs || [];
       tasks.value = tasksRes.tasks || [];
       agents.value = agentsRes.agents || [];
       excards.value = excardsRes.excards || [];
-      console.log('[BoardStore] agents set to:', agents.value);
     } catch (err) {
       console.error('[BoardStore] fetchAll:', err);
       setError(err);
@@ -175,13 +148,9 @@ export const useBoardStore = defineStore('board', () => {
 
   // 清理SSE连接
   function cleanup() {
-    if (es) {
-      es.close();
-      es = null;
-    }
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
+    if (sseHandle) {
+      sseHandle.close();
+      sseHandle = null;
     }
   }
 

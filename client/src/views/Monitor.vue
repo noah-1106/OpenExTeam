@@ -1,14 +1,14 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
-import api from '../api/client.js';
+import api, { BASE as API_BASE } from '../api/client.js';
+import { createSSEConnection } from '../api/sse.js';
 
 const props = defineProps({
   agents: { type: Array, required: true },
 });
 
 const logs = ref([]);
-const SSE_URL = window.location.origin.replace(/:\d+$/, ':4000') + '/api/events';
-let es = null;
+let sseHandle = null;
 
 const statusConfig = {
   online: { label: '在线', color: 'text-green-600', bg: 'bg-green-50' },
@@ -25,8 +25,7 @@ const agentAvatars = {
 
 async function loadLogs() {
   try {
-    const data = await fetch(`${window.location.origin.replace(/:\d+$/, ':4000')}/api/logs?limit=50`);
-    const result = await data.json();
+    const result = await api.getLogs(50);
     logs.value = result.logs || [];
   } catch (err) {
     console.error('Failed to load logs:', err);
@@ -34,32 +33,28 @@ async function loadLogs() {
 }
 
 function connectSSE() {
-  if (es) es.close();
-  es = new EventSource(SSE_URL);
+  if (sseHandle) sseHandle.close();
 
-  es.addEventListener('log', (event) => {
-    try {
-      const logData = JSON.parse(event.data);
-      logs.value.unshift(logData);
-      if (logs.value.length > 50) {
-        logs.value.pop();
+  sseHandle = createSSEConnection({
+    log: (event) => {
+      try {
+        const logData = JSON.parse(event.data);
+        logs.value.unshift(logData);
+        if (logs.value.length > 50) logs.value.pop();
+      } catch (err) {
+        console.error('Failed to parse log event:', err);
       }
-    } catch (err) {
-      console.error('Failed to parse log event:', err);
-    }
-  });
+    },
 
-  // 同时监听 agent_message 事件，这些也应该显示在日志中
-  es.addEventListener('agent_message', (event) => {
-    try {
-      const logData = JSON.parse(event.data);
-      logs.value.unshift(logData);
-      if (logs.value.length > 50) {
-        logs.value.pop();
+    agent_message: (event) => {
+      try {
+        const logData = JSON.parse(event.data);
+        logs.value.unshift(logData);
+        if (logs.value.length > 50) logs.value.pop();
+      } catch (err) {
+        console.error('Failed to parse agent_message event:', err);
       }
-    } catch (err) {
-      console.error('Failed to parse agent_message event:', err);
-    }
+    },
   });
 }
 
@@ -144,9 +139,9 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  if (es) {
-    es.close();
-    es = null;
+  if (sseHandle) {
+    sseHandle.close();
+    sseHandle = null;
   }
 });
 </script>

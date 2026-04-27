@@ -6,9 +6,9 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import api from '../api/client';
+import { createSSEConnection } from '../api/sse';
 
-const SSE_URL = window.location.origin.replace(/:\d+$/, ':4000') + '/api/events';
-let es = null;
+let sseHandle = null;
 
 export const useChatStore = defineStore('chat', () => {
   // 会话列表
@@ -38,117 +38,115 @@ export const useChatStore = defineStore('chat', () => {
 
   // SSE 连接
   function connectSSE() {
-    if (es) es.close();
-    es = new EventSource(SSE_URL);
+    if (sseHandle) sseHandle.close();
 
-    // Agent 回复消息 - 使用 messageId 和 state 处理流式消息
-    es.addEventListener('agent_message', (e) => {
-      const msg = JSON.parse(e.data);
-      const msgAgent = msg.agent || msg.from;
-      const content = msg.content || msg.text || msg.output || JSON.stringify(msg.result || msg);
-      const messageId = msg.messageId;
-      const state = msg.state; // "delta" 或 "final"
+    sseHandle = createSSEConnection({
+      agent_message: (e) => {
+        const msg = JSON.parse(e.data);
+        const msgAgent = msg.agent || msg.from;
+        const content = msg.content || msg.text || msg.output || JSON.stringify(msg.result || msg);
+        const messageId = msg.messageId;
+        const state = msg.state; // "delta" 或 "final"
 
-      console.log('[Chat] Received message:', { messageId, state, agent: msgAgent, from: msg.from, type: msg.type, content });
+        console.log('[Chat] Received message:', { messageId, state, agent: msgAgent, from: msg.from, type: msg.type, content });
 
-      // 检查是否是系统消息（工作流通知）
-      if (msg.from === 'system' || msg.type?.startsWith('workflow_') || msg.type?.startsWith('message_')) {
-        console.log('[Chat] System/workflow message, routing to system session');
-        const systemSess = ensureSystemSession();
+        // 检查是否是系统消息（工作流通知）
+        if (msg.from === 'system' || msg.type?.startsWith('workflow_') || msg.type?.startsWith('message_')) {
+          console.log('[Chat] System/workflow message, routing to system session');
+          const systemSess = ensureSystemSession();
 
-        // 添加系统消息
-        const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-        const displayContent = typeof content === 'string' ? content :
-                             (content.title ? `${content.title}\n${content.message || ''}` : JSON.stringify(content));
-        systemSess.messages.push({
-          sender: 'system',
-          text: displayContent,
-          time: timeStr,
-          jobId: msg.jobId,
-          msgType: msg.type
+          // 添加系统消息
+          const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          const displayContent = typeof content === 'string' ? content :
+                               (content.title ? `${content.title}\n${content.message || ''}` : JSON.stringify(content));
+          systemSess.messages.push({
+            sender: 'system',
+            text: displayContent,
+            time: timeStr,
+            jobId: msg.jobId,
+            msgType: msg.type
+          });
+
+          // 如果当前没有选中会话，自动选中系统会话
+          if (!activeSessionId.value) {
+            activeSessionId.value = systemSess.id;
+          }
+          return;
+        }
+
+        // 找到对应的会话
+        const sess = sessions.value.find(s => {
+          if (s.type === 'p2p') {
+            const sAgentPart = s.agentId.includes(':') ? s.agentId.split(':').pop() : s.agentId;
+            const msgAgentPart = msgAgent.includes(':') ? msgAgent.split(':').pop() : msgAgent;
+            return s.agentId === msgAgent || sAgentPart === msgAgent || sAgentPart === msgAgentPart;
+          }
+          if (s.type === 'group') {
+            return s.agentIds?.some(agentId => {
+              const agentPart = agentId.includes(':') ? agentId.split(':').pop() : agentId;
+              const msgAgentPart = msgAgent.includes(':') ? msgAgent.split(':').pop() : msgAgent;
+              return agentId === msgAgent || agentPart === msgAgent || agentPart === msgAgentPart;
+            });
+          }
+          return false;
         });
 
-        // 如果当前没有选中会话，自动选中系统会话
-        if (!activeSessionId.value) {
-          activeSessionId.value = systemSess.id;
+        if (!sess) {
+          console.log('[Chat] No session found for agent:', msgAgent);
+          return;
         }
-        return;
-      }
 
-      // 找到对应的会话
-      const sess = sessions.value.find(s => {
-        if (s.type === 'p2p') {
-          const sAgentPart = s.agentId.includes(':') ? s.agentId.split(':').pop() : s.agentId;
-          const msgAgentPart = msgAgent.includes(':') ? msgAgent.split(':').pop() : msgAgent;
-          return s.agentId === msgAgent || sAgentPart === msgAgent || sAgentPart === msgAgentPart;
-        }
-        if (s.type === 'group') {
-          return s.agentIds?.some(agentId => {
-            const agentPart = agentId.includes(':') ? agentId.split(':').pop() : agentId;
-            const msgAgentPart = msgAgent.includes(':') ? msgAgent.split(':').pop() : msgAgent;
-            return agentId === msgAgent || agentPart === msgAgent || agentPart === msgAgentPart;
-          });
-        }
-        return false;
-      });
+        // 检查是否是已有流式消息的更新
+        if (messageId && streamingMessages.value.has(messageId)) {
+          const streamState = streamingMessages.value.get(messageId);
+          if (streamState.sessionId === sess.id) {
+            // 更新现有消息
+            const existingMsg = sess.messages[streamState.messageIndex];
+            if (existingMsg) {
+              existingMsg.text = content;
+              console.log('[Chat] Updated streaming message:', messageId);
 
-      if (!sess) {
-        console.log('[Chat] No session found for agent:', msgAgent);
-        return;
-      }
-
-      // 检查是否是已有流式消息的更新
-      if (messageId && streamingMessages.value.has(messageId)) {
-        const streamState = streamingMessages.value.get(messageId);
-        if (streamState.sessionId === sess.id) {
-          // 更新现有消息
-          const existingMsg = sess.messages[streamState.messageIndex];
-          if (existingMsg) {
-            existingMsg.text = content;
-            console.log('[Chat] Updated streaming message:', messageId);
-
-            // 如果是 final 状态，清理跟踪
-            if (state === 'final') {
-              streamingMessages.value.delete(messageId);
-              console.log('[Chat] Stream finished:', messageId);
+              // 如果是 final 状态，清理跟踪
+              if (state === 'final') {
+                streamingMessages.value.delete(messageId);
+                console.log('[Chat] Stream finished:', messageId);
+              }
+              return;
             }
-            return;
           }
         }
-      }
 
-      // 新消息
-      const newMessage = {
-        sender: msgAgent,
-        agentId: msgAgent,
-        text: content,
-        time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-      };
-      sess.messages.push(newMessage);
-      console.log('[Chat] Added new message, total:', sess.messages.length);
+        // 新消息
+        const newMessage = {
+          sender: msgAgent,
+          agentId: msgAgent,
+          text: content,
+          time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+        };
+        sess.messages.push(newMessage);
+        console.log('[Chat] Added new message, total:', sess.messages.length);
 
-      // 如果是 delta 状态，开始跟踪
-      if (messageId && (state === 'delta' || state !== 'final')) {
-        streamingMessages.value.set(messageId, {
-          sessionId: sess.id,
-          messageIndex: sess.messages.length - 1,
-        });
-        console.log('[Chat] Started tracking stream:', messageId);
-      }
+        // 如果是 delta 状态，开始跟踪
+        if (messageId && (state === 'delta' || state !== 'final')) {
+          streamingMessages.value.set(messageId, {
+            sessionId: sess.id,
+            messageIndex: sess.messages.length - 1,
+          });
+          console.log('[Chat] Started tracking stream:', messageId);
+        }
+      },
+
+      agent_callback: (e) => {
+        const cb = JSON.parse(e.data);
+        if (cb.result?.output) {
+          console.log('[Chat] Agent callback:', cb);
+        }
+      },
+    }, {
+      onError: () => {
+        console.warn('[Chat] SSE connection lost, reconnecting...');
+      },
     });
-
-    // 通用 agent 回调（任务完成等）
-    es.addEventListener('agent_callback', (e) => {
-      const cb = JSON.parse(e.data);
-      if (cb.result?.output) {
-        console.log('[Chat] Agent callback:', cb);
-      }
-    });
-
-    es.onerror = () => {
-      console.warn('[Chat] SSE connection lost, reconnecting...');
-      setTimeout(connectSSE, 3000);
-    };
   }
 
   // 初始化会话（从 agents 列表构建）
@@ -198,16 +196,6 @@ export const useChatStore = defineStore('chat', () => {
         messages: savedMessages,
       });
     });
-
-    // 创建默认群聊（暂时隐藏）
-    // sessions.value.push({
-    //   id: 'group-dev',
-    //   type: 'group',
-    //   name: '开发群',
-    //   avatarUrl: null,
-    //   agentIds: agentList.map(a => a.id),
-    //   messages: [],
-    // });
 
     // 确保系统会话存在
     ensureSystemSession();
@@ -279,18 +267,6 @@ export const useChatStore = defineStore('chat', () => {
       if (sess.type === 'p2p') {
         await api.sendMessage(sess.agentId, actualMessageToSend, 'chat');
       }
-      // 群聊功能暂时隐藏
-      // else {
-      //   await Promise.all(
-      //     sess.agentIds.map(async agId => {
-      //       const pureId = agId.includes(':') ? agId.split(':').pop() : agId;
-      //       const agent = agents.value.find(a => a.id === pureId || a.id === agId);
-      //       if (agent?.connected) {
-      //         await api.sendMessage(agId, `[群消息] ${text.trim()}`, 'chat');
-      //       }
-      //     })
-      //   );
-      // }
     } catch (err) {
       console.error('[Chat] sendMessage error:', err);
       sess.messages.push({
@@ -373,7 +349,6 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage,
     selectSession,
     activeSession,
-    // addGroupSession, // 群聊功能暂时隐藏
     ensureSystemSession,
     loadSessionHistory,
   };

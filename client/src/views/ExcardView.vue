@@ -3,8 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useExcardStore } from '../stores/excards'
 import { useSettingsStore } from '../stores/settings'
 import ExcardMdEditor from '../components/ExcardMdEditor.vue'
-
-const API_BASE = window.location.origin.replace(/:\d+$/, ':4000')
+import api from '../api/client'
 
 const store = useExcardStore()
 const settingsStore = useSettingsStore()
@@ -16,8 +15,7 @@ const agents = ref([])
 
 async function fetchAgents() {
   try {
-    const res = await fetch(`${API_BASE}/api/agents`)
-    const data = await res.json()
+    const data = await api.getAgents()
     agents.value = data.agents || []
   } catch (err) {
     console.error('[ExcardView] fetchAgents error:', err)
@@ -164,11 +162,9 @@ async function createExcard() {
 
 async function startEditExcard() {
   // 从 Markdown 重新解析数据，确保内容一致
-  const API_BASE = window.location.origin.replace(/:\d+$/, ':4000')
   try {
-    const mdRes = await fetch(`${API_BASE}/api/excards/${store.selectedExcard.id}/md`)
-    if (mdRes.ok) {
-      const mdData = await mdRes.json()
+    const mdData = await api.getExcardMd(store.selectedExcard.id)
+    if (mdData) {
       // 先使用 store 中的数据
       editData.value = JSON.parse(JSON.stringify(store.selectedExcard))
       // 然后尝试从 Markdown 解析最新数据

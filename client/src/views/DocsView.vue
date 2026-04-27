@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const docs = ref([
   {
@@ -342,7 +343,8 @@ function getCategoryColor(category) {
 
 const renderedContent = computed(() => {
   if (!selectedDoc.value) return ''
-  return marked.parse(selectedDoc.value.content)
+  const raw = marked.parse(selectedDoc.value.content)
+  return DOMPurify.sanitize(raw)
 })
 </script>
 

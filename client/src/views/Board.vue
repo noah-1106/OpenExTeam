@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import api from '../api/client.js'
+import { createSSEConnection } from '../api/sse.js'
 
 const props = defineProps({
   jobs: { type: Array, required: true },
@@ -12,9 +13,7 @@ const emit = defineEmits(['update-task', 'create-task', 'start-job'])
 
 const jobSteps = ref({}) // jobId -> steps array
 const selectedJobId = ref(null)
-
-const SSE_URL = window.location.origin.replace(/:\d+$/, ':4000') + '/api/events'
-let es = null
+let sseHandle = null
 
 const activeJobs = computed(() => {
   return props.jobs.filter(job => job.status === 'in-progress')
@@ -89,31 +88,32 @@ function selectJob(jobId) {
 
 // SSE event handling for real-time updates
 function connectSSE() {
-  if (es) es.close()
-  es = new EventSource(SSE_URL)
+  if (sseHandle) sseHandle.close()
 
-  es.addEventListener('workflow_started', (e) => {
-    const d = JSON.parse(e.data)
-    console.log('[Board] Workflow started:', d)
-    setTimeout(() => loadJobSteps(d.jobId), 100)
-  })
+  sseHandle = createSSEConnection({
+    workflow_started: (e) => {
+      const d = JSON.parse(e.data)
+      console.log('[Board] Workflow started:', d)
+      setTimeout(() => loadJobSteps(d.jobId), 100)
+    },
 
-  es.addEventListener('workflow_step_advanced', (e) => {
-    const d = JSON.parse(e.data)
-    console.log('[Board] Workflow step advanced:', d)
-    setTimeout(() => loadJobSteps(d.jobId), 100)
-  })
+    workflow_step_advanced: (e) => {
+      const d = JSON.parse(e.data)
+      console.log('[Board] Workflow step advanced:', d)
+      setTimeout(() => loadJobSteps(d.jobId), 100)
+    },
 
-  es.addEventListener('workflow_completed', (e) => {
-    const d = JSON.parse(e.data)
-    console.log('[Board] Workflow completed:', d)
-    setTimeout(() => loadJobSteps(d.jobId), 100)
-  })
+    workflow_completed: (e) => {
+      const d = JSON.parse(e.data)
+      console.log('[Board] Workflow completed:', d)
+      setTimeout(() => loadJobSteps(d.jobId), 100)
+    },
 
-  es.addEventListener('workflow_error', (e) => {
-    const d = JSON.parse(e.data)
-    console.log('[Board] Workflow error:', d)
-    setTimeout(() => loadJobSteps(d.jobId), 100)
+    workflow_error: (e) => {
+      const d = JSON.parse(e.data)
+      console.log('[Board] Workflow error:', d)
+      setTimeout(() => loadJobSteps(d.jobId), 100)
+    },
   })
 }
 
@@ -125,9 +125,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (es) {
-    es.close()
-    es = null
+  if (sseHandle) {
+    sseHandle.close()
+    sseHandle = null
   }
 })
 
