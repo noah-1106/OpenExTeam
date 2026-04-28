@@ -5,7 +5,7 @@
  * - 连接方式：HTTP REST API
  * - 默认端口：2026
  * - Agent 架构：单 agent + 动态 sub-agents
- * - API endpoints: /api/health, /api/chat, /api/threads, /api/skills 等
+ * - API endpoints: /health, /api/runs/wait, /api/threads, /api/skills 等
  *
  * GitHub：https://github.com/bytedance/deer-flow
  */
@@ -30,7 +30,7 @@ class DeerFlowAdapter extends EventEmitter {
       const url = new URL(this.baseUrl);
       this.hostname = url.hostname;
       this.port = url.port || 80;
-      this.pathname = url.pathname || '';
+      this.pathname = (url.pathname && url.pathname !== '/') ? url.pathname.replace(/\/$/, '') : '';
     } catch {
       this.hostname = '127.0.0.1';
       this.port = 2026;
@@ -146,7 +146,7 @@ class DeerFlowAdapter extends EventEmitter {
    */
   async _getHealth() {
     try {
-      const result = await this._get('/api/health');
+      const result = await this._get('/health');
       return result;
     } catch (err) {
       console.warn('[DeerFlowAdapter] Health check failed:', err.message);
@@ -294,7 +294,7 @@ class DeerFlowAdapter extends EventEmitter {
   async _createThread() {
     try {
       const result = await this._post('/api/threads', {});
-      return result.threadId || result.id || `thread_${Date.now()}`;
+      return result.thread_id || result.threadId || result.id || `thread_${Date.now()}`;
     } catch (err) {
       console.warn('[DeerFlowAdapter] Failed to create thread, using temporary:', err.message);
       return `thread_${Date.now()}`;
@@ -303,21 +303,36 @@ class DeerFlowAdapter extends EventEmitter {
 
   /**
    * 发送聊天消息
+   * DeerFlow 2.0 uses LangGraph runs/wait API
    */
   async _sendChat(threadId, message, mode = 'standard') {
     const payload = {
-      message: message,
-      thread_id: threadId,
-      mode: mode
+      assistant_id: 'lead_agent',
+      input: {
+        messages: [{ role: 'user', content: message }]
+      },
+      config: {
+        configurable: { thread_id: threadId }
+      },
+      context: {
+        mode: mode
+      }
     };
 
-    const result = await this._post('/api/chat', payload);
+    const result = await this._post('/api/runs/wait', payload);
+
+    // Extract assistant response from run state
+    const messages = result?.values?.messages || [];
+    const assistantMsg = [...messages].reverse().find(m => m.role === 'assistant' || m.type === 'assistant');
+    const content = assistantMsg?.content
+      ? (typeof assistantMsg.content === 'string' ? assistantMsg.content : JSON.stringify(assistantMsg.content))
+      : JSON.stringify(result);
 
     // 发送消息事件
     const responseMessage = {
       type: 'chat',
       from: 'deerflow-main',
-      content: result.response || result.message || result.content || JSON.stringify(result),
+      content: content,
       timestamp: new Date().toISOString(),
       threadId: threadId
     };
@@ -333,7 +348,7 @@ class DeerFlowAdapter extends EventEmitter {
    */
   async listSessions() {
     try {
-      const result = await this._get('/api/threads');
+      const result = await this._post('/api/threads/search', { limit: 100, offset: 0 });
       const threads = result.threads || result || [];
       return threads.map(thread => ({
         id: thread.id || thread.threadId,

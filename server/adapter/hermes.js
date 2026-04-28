@@ -262,7 +262,7 @@ class HermesAdapter extends EventEmitter {
     }
 
     return new Promise((resolve) => {
-      exec(`${this.hermesPath} profiles list`, { timeout: 10000, cwd: this.workingDir }, (error, stdout, stderr) => {
+      exec(`${this.hermesPath} profile list`, { timeout: 10000, cwd: this.workingDir }, (error, stdout, stderr) => {
         if (error) {
           console.warn('[HermesAdapter] profiles list failed:', error.message);
           resolve([]);
@@ -351,11 +351,11 @@ class HermesAdapter extends EventEmitter {
    */
   async _executeChat(prompt, profileName = null) {
     return new Promise((resolve, reject) => {
-      let cmd = `${this.hermesPath} chat -q "${this._escapeQuotes(prompt)}" --quiet`;
-
-      if (profileName && profileName !== 'hermes-default') {
-        cmd += ` --profile ${profileName}`;
-      }
+      // --profile is a global flag, must come before the subcommand
+      const profileArg = (profileName && profileName !== 'hermes-default')
+        ? `--profile ${profileName} `
+        : '';
+      let cmd = `${this.hermesPath} ${profileArg}chat -q "${this._escapeQuotes(prompt)}" --quiet`;
 
       console.log('[HermesAdapter] Executing:', cmd);
 
@@ -400,7 +400,7 @@ class HermesAdapter extends EventEmitter {
     }
 
     return new Promise((resolve) => {
-      exec(`${this.hermesPath} sessions`, { timeout: 10000, cwd: this.workingDir }, (error, stdout, stderr) => {
+      exec(`${this.hermesPath} sessions list`, { timeout: 10000, cwd: this.workingDir }, (error, stdout, stderr) => {
         if (error) {
           console.warn('[HermesAdapter] sessions list failed:', error.message);
           resolve([]);
