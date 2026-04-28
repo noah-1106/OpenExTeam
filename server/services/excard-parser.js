@@ -32,6 +32,7 @@ function parseExcardMd(mdContent) {
   const lines = mdContent.split('\n')
   let currentSection = ''
   let currentStep = null
+  let currentResource = null
   let inFrontmatter = false
 
   for (let i = 0; i < lines.length; i++) {
@@ -88,14 +89,73 @@ function parseExcardMd(mdContent) {
 
     // 解析各 section 内容
     if (currentSection === 'resource dependencies') {
-      if (line.startsWith('- ') || line.startsWith('* ')) {
-        const resourceText = line.slice(2).trim()
-        excard.resources.push(resourceText)
+      if (line.startsWith('### ')) {
+        // Sub-heading format: ### Resource Name — finalize previous resource first
+        if (currentResource && currentResource.name) {
+          excard.resources.push(currentResource)
+        }
+        const resName = line.slice(4).trim()
+        if (resName) {
+          currentResource = { name: resName, type: '', source: '', path: '', purpose: '' }
+        }
+      } else if (currentResource && line.match(/^-\s+\*\*/)) {
+        // Key-value within resource sub-heading: - **Key**: value
+        const kvMatch = line.match(/^-\s+\*\*(.*?)\*\*:\s*(.*)$/)
+        if (kvMatch) {
+          const key = kvMatch[1].trim().toLowerCase()
+          const value = kvMatch[2].trim()
+          if (key === 'type') currentResource.type = value
+          else if (key === 'source') currentResource.source = value
+          else if (key === 'path') currentResource.path = value
+          else if (key === 'purpose') currentResource.purpose = value
+        }
+      } else if (line.startsWith('- ') || line.startsWith('* ')) {
+        // Simple list format (only when not inside a sub-heading resource)
+        if (!currentResource) {
+          const resourceText = line.slice(2).trim()
+          excard.resources.push(resourceText)
+        }
+      } else if (line.startsWith('|') && !line.match(/^\|[\s-|]+\|$/)) {
+        // Table format: | Type | Name | Source | Path | Purpose |
+        const cells = line.split('|').map(c => c.trim()).filter(Boolean)
+        if (cells.length >= 2 && cells[0] !== 'Resource Type') {
+          excard.resources.push({
+            type: cells[0] || '-',
+            name: cells[1] || '-',
+            source: cells[2] || '-',
+            path: cells[3] || '-',
+            purpose: cells[4] || '-'
+          })
+        }
+      } else if (line.trim() === '' && currentResource) {
+        // Blank line = end of current resource
+        if (currentResource.name) {
+          excard.resources.push(currentResource)
+        }
+        currentResource = null
       }
     }
 
     if (currentSection === 'execution workflow') {
-      if (line.match(/^\d+\.\s/)) {
+      // ### Step N: name format
+      if (line.match(/^###\s+step\s+\d+/i)) {
+        if (currentStep) excard.workflow.push(currentStep)
+        const stepMatch = line.match(/^###\s+[Ss]tep\s+(\d+)\s*[:：]?\s*(.*)$/)
+        if (stepMatch) {
+          currentStep = {
+            index: parseInt(stepMatch[1]),
+            name: stepMatch[2].trim(),
+            description: '',
+            action: '',
+            tool: '',
+            input: '',
+            output: '',
+            checkpoint: ''
+          }
+        }
+      }
+      // Numbered list format: 1. **name** description
+      else if (line.match(/^\d+\.\s/)) {
         if (currentStep) excard.workflow.push(currentStep)
         const stepMatch = line.match(/^(\d+)\.\s\*\*(.*?)\*\*(.*)$/)
         if (stepMatch) {
@@ -113,8 +173,20 @@ function parseExcardMd(mdContent) {
           }
         }
       } else if (currentStep && line) {
-        // 继续追加步骤描述
-        if (!line.toLowerCase().startsWith('agent:')) {
+        // Parse key-value pairs in Step sub-heading format
+        const kvMatch = line.match(/^-\s+\*\*(.*?)\*\*:\s*(.*)$/)
+        if (kvMatch) {
+          const key = kvMatch[1].trim().toLowerCase()
+          const value = kvMatch[2].trim()
+          if (key === 'action') currentStep.action = value
+          else if (key === 'tool used' || key === 'tool') currentStep.tool = value
+          else if (key === 'input') currentStep.input = value
+          else if (key === 'output') currentStep.output = value
+          else if (key === 'checkpoint') currentStep.checkpoint = value
+          else if (key === 'description') currentStep.description = value
+        }
+        // Fallback: append to description for numbered list format
+        else if (!line.toLowerCase().startsWith('agent:')) {
           if (currentStep.description) currentStep.description += '\n' + rawLine.trim()
           else currentStep.description = rawLine.trim()
         }
@@ -123,7 +195,8 @@ function parseExcardMd(mdContent) {
 
     if (currentSection === 'execution conventions') {
       if (line.toLowerCase().startsWith('### input') || line.toLowerCase().startsWith('## input') ||
-          line.toLowerCase().includes('### 输入') || line.toLowerCase().includes('## 输入')) {
+          line.toLowerCase().includes('### 输入') || line.toLowerCase().includes('## 输入') ||
+          line.toLowerCase().includes('input conventions')) {
         let j = i + 1
         let content = ''
         while (j < lines.length && (lines[j].trim() === '' || !lines[j].trim().startsWith('#'))) {
@@ -134,7 +207,8 @@ function parseExcardMd(mdContent) {
         }
         excard.conventions.input = content
       } else if (line.toLowerCase().startsWith('### output') || line.toLowerCase().startsWith('## output') ||
-                 line.toLowerCase().includes('### 输出') || line.toLowerCase().includes('## 输出')) {
+                 line.toLowerCase().includes('### 输出') || line.toLowerCase().includes('## 输出') ||
+                 line.toLowerCase().includes('output conventions')) {
         let j = i + 1
         let content = ''
         while (j < lines.length && (lines[j].trim() === '' || !lines[j].trim().startsWith('#'))) {
@@ -166,12 +240,14 @@ function parseExcardMd(mdContent) {
   }
 
   if (currentStep) excard.workflow.push(currentStep)
+  if (currentResource && currentResource.name) excard.resources.push(currentResource)
 
   return excard
 }
 
 /**
  * JSON → ExCard Markdown
+ * 输出符合 OpenExCard 规范的格式（清单形式，避免表格）
  */
 function toExcardMd(excard) {
   let md = `---
@@ -189,24 +265,47 @@ ${excard.description || ''}
 
 ## Resource Dependencies
 
-${(excard.resources || []).length > 0 ? (excard.resources || []).map(r => `- ${r}`).join('\n') : '暂无'}
+`
 
-## Execution Workflow
+  if ((excard.resources || []).length > 0) {
+    for (const r of excard.resources) {
+      if (typeof r === 'object') {
+        md += `### ${r.name || '未命名资源'}
+- **Type**: ${r.type || '-'}
+- **Source**: ${r.source || '-'}
+- **Path**: ${r.path || '-'}
+- **Purpose**: ${r.purpose || '-'}
+
+`
+      } else {
+        md += `- ${r}\n`
+      }
+    }
+  } else {
+    md += '暂无\n'
+  }
+
+  md += `## Execution Workflow
 
 `
 
   for (const step of (excard.workflow || [])) {
-    let stepMd = `${step.index || 1}. **${step.name}**`
-    if (step.description) stepMd += ` ${step.description}`
-    md += stepMd + '\n\n'
+    md += `### Step ${step.index || 1}: ${step.name || ''}
+- **Action**: ${step.action || step.description || '-'}
+- **Tool Used**: ${step.tool || '-'}
+- **Input**: ${step.input || '-'}
+- **Output**: ${step.output || '-'}
+- **Checkpoint**: ${step.checkpoint || '-'}
+
+`
   }
 
   md += `## Execution Conventions
 
-### Input
+### Input Conventions
 ${excard.conventions?.input || '-'}
 
-### Output
+### Output Conventions
 ${excard.conventions?.output || '-'}
 
 ### Error Handling

@@ -62,7 +62,7 @@ function handleCreate() {
         <div class="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
           <div>
             <h3 class="font-semibold text-primary">创建 ExCard</h3>
-            <p class="text-xs text-muted mt-1">创建一个新的 ExCard 模板</p>
+            <p class="text-xs text-muted mt-1">创建标准化执行模板，定义 Agent 如何执行任务</p>
           </div>
           <button @click="handleClose" class="text-muted hover:text-primary text-xl leading-none">×</button>
         </div>
@@ -71,14 +71,14 @@ function handleCreate() {
         <div class="flex-1 overflow-y-auto p-6 space-y-4">
           <div>
             <label class="block text-sm font-medium text-primary mb-1.5">ExCard 名称 *</label>
-            <input v-model="form.name" type="text" placeholder="输入名称"
+            <input v-model="form.name" type="text" placeholder="例如：EC-001-daily-report"
               class="w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
             />
           </div>
 
           <div>
             <label class="block text-sm font-medium text-primary mb-1.5">描述</label>
-            <textarea v-model="form.description" rows="2" placeholder="简要描述这个 ExCard 的用途"
+            <textarea v-model="form.description" rows="2" placeholder="一句话描述这个 ExCard 的用途和使用场景"
               class="w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
             ></textarea>
           </div>
@@ -93,7 +93,7 @@ function handleCreate() {
 
           <div>
             <label class="block text-sm font-medium text-primary mb-1.5">Markdown 内容 *</label>
-            <textarea v-model="form.markdown" rows="10" placeholder="# ExCard 标题&#10;&#10;## 任务描述&#10;..."
+            <textarea v-model="form.markdown" rows="10" placeholder="# EC-XXX: 卡片名称&#10;&#10;## Resource Dependencies&#10;&#10;### 资源名称&#10;- **Type**: Skill/File/Directory&#10;- **Purpose**: 用途说明&#10;&#10;## Execution Workflow&#10;&#10;### Step 1: 步骤名称&#10;- **Action**: 具体执行动作&#10;- **Checkpoint**: 验证标准&#10;&#10;## Execution Conventions&#10;&#10;### Input Conventions&#10;- **数据来源**: ..."
               class="w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-mono"
             ></textarea>
           </div>

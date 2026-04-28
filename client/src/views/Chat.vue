@@ -196,43 +196,48 @@ async function sendMessage() {
 现有 ExCard 内容：
 ${existingContent || '（无法获取现有内容）'}
 
-请严格按照以下格式回复修改后的提案：
+请输出修改后的完整 ExCard，严格遵循以下格式：
 [EXCARD_PROPOSAL]
-name: 简短的卡片名称（如果不需要修改可以保持原名）
-description: 简要描述这个 ExCard 的用途
+name: 修改后的卡片名称（如不需要改可保持原名）
+description: 一句话描述这个 ExCard 的用途
 agent: ${activeSession.value?.agentId || ''}
 markdown:
-# ExCard 标题
-
-## 卡片目的
-
-简述这个 ExCard 的用途
+# EC-XXX: 卡片名称
 
 ## Resource Dependencies
 
-- 资源1
-- 资源2
+### 技能/资源名称
+- **Type**: Skill/File/Directory/API
+- **Source**: 来源
+- **Path**: 路径
+- **Purpose**: 用途
 
 ## Execution Workflow
 
-1. **第一步名称** — 第一步描述
-2. **第二步名称** — 第二步描述
-3. ...
+### Step 1: 步骤名称
+- **Action**: 具体执行动作
+- **Tool Used**: 使用的技能/工具
+- **Input**: 输入数据
+- **Output**: 输出结果
+- **Checkpoint**: 验证标准
+
+（按顺序编号所有步骤）
 
 ## Execution Conventions
 
-### Input
-输入格式要求
+### Input Conventions
+- **数据来源**: 输入路径和格式要求
 
-### Output
-输出格式要求
+### Output Conventions
+- **保存位置**: 输出路径
+- **输出格式**: 格式要求
 
 ### Error Handling
-错误处理方式
+- **错误场景**: 处理方式
 
 ---
 
-请确保 markdown 部分是完整的修改后的 ExCard 内容。`
+必须包含 Resource Dependencies / Execution Workflow / Execution Conventions 三个核心 Section。请确保 markdown 部分是完整的修改后的 ExCard 内容，不要省略任何未修改的部分。`
 
       // 调用 sendMessage，用户只看到原始命令，实际发送的是带格式要求的消息
       await chatStore.sendMessage(text, {
@@ -245,47 +250,53 @@ markdown:
       isModifyMode.value = false
       targetExcardId.value = ''
 
-      const actualMessage = `请帮我创建一个 ExCard，主题是：${userDemand}
+      const actualMessage = `请帮我创建一个 ExCard（Execution Card），主题是：${userDemand}
 
-请严格按照以下格式回复：
+ExCard 是场景化的执行标准，定义"如何做"而非"做什么"。请严格按照以下格式回复：
+
 [EXCARD_PROPOSAL]
-name: 简短的卡片名称
-description: 简要描述这个 ExCard 的用途
+name: EC-XXX-简短英文名（XXX为3位编号，如001）
+description: 一句话描述这个 ExCard 的用途
 agent: ${activeSession.value?.agentId || ''}
 markdown:
-# ExCard 标题
-
-## 卡片目的
-
-简述这个 ExCard 的用途
+# EC-XXX: 卡片名称
 
 ## Resource Dependencies
 
-- 资源1
-- 资源2
+### 技能/资源名称
+- **Type**: Skill/File/Directory/API
+- **Source**: 来源
+- **Path**: 路径
+- **Purpose**: 用途
 
 ## Execution Workflow
 
-1. **第一步名称** — 第一步描述
-2. **第二步名称** — 第二步描述
-3. ...
+### Step 1: 步骤名称
+- **Action**: 具体执行动作
+- **Tool Used**: 使用的技能/工具
+- **Input**: 输入数据
+- **Output**: 输出结果
+- **Checkpoint**: 验证标准
+
+（3-15步，按顺序编号）
 
 ## Execution Conventions
 
-### Input
-输入格式要求
+### Input Conventions
+- **数据来源**: 输入路径和格式要求
+- **前置条件**: 执行前必须满足的条件
 
-### Output
-输出格式要求
+### Output Conventions
+- **保存位置**: 输出路径
+- **输出格式**: 格式要求
 
 ### Error Handling
-错误处理方式
-
-描述期望的输出格式
+- **错误场景1**: 处理方式
+- **错误场景2**: 处理方式
 
 ---
 
-请确保 markdown 部分是完整的 ExCard 内容，使用上面的格式或类似的结构化格式。`
+必须包含以上三个核心 Section（Resource Dependencies / Execution Workflow / Execution Conventions），否则 ExCard 不完整。请确保 markdown 部分是完整的 ExCard 内容。`
 
       // 调用 sendMessage，用户只看到原始的 /ec 命令，实际发送的是带格式要求的消息
       await chatStore.sendMessage(text, {

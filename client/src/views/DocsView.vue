@@ -9,15 +9,17 @@ const docs = ref([
     title: '项目介绍',
     content: `# OpenExTeam
 
-OpenExTeam 是一个跨框架 AI Agent 团队协作平台。
+OpenExTeam 是一个跨框架 AI Agent 团队协作平台，在一个 Dashboard 上统一管理不同底座的 AI Agent。
 
 ## 核心功能
 
 - **多底座支持**：统一管理 OpenClaw、Hermes、DeerFlow 等不同框架的 Agent
-- **聊天协作**：与单个 Agent 对话，或进行群聊
-- **工作编排**：创建多步骤工作流，自动在 Agent 间流转
+- **消息即总线**：所有交互通过消息完成，不侵入底座内部
+- **聊天协作**：与单个 Agent 对话，支持流式输出和聊天历史持久化
+- **系统通知**：工作流进度、工具调用等系统消息集中在一个会话中
+- **工作编排**：创建多步骤工作流，Agent 完成一步自动推进下一步
 - **ExCard 模板**：使用 Markdown 定义完整的任务执行模板
-- **实时监控**：查看 Agent 状态和执行日志
+- **实时看板**：三列看板展示当前执行中工作的步骤进度
 
 ## 快速开始
 
@@ -30,11 +32,12 @@ OpenExTeam 是一个跨框架 AI Agent 团队协作平台。
 
 | 概念 | 说明 |
 |------|------|
-| Agent | AI 助手，可以是 LLM 或其他智能体 |
-| 底座 | Agent 运行框架（OpenClaw/Hermes/DeerFlow） |
-| 工作 | 任务容器，可包含多个步骤 |
-| 步骤 | 工作的单个执行单元 |
-| ExCard | Markdown 格式的任务模板 |`,
+| Agent | AI 助手，由底座框架管理运行 |
+| 底座 (Adapter) | Agent 运行框架（OpenClaw/Hermes/DeerFlow） |
+| 工作 (Job) | 任务容器，可包含多个步骤 |
+| 步骤 (Step) | 工作的单个执行单元，可指定不同 Agent |
+| ExCard | Markdown 格式的完整执行模板 |
+| 消息总线 | 所有交互的核心通道，Dashboard 只做发消息、收消息、驱动工作流 |`,
     category: '快速入门',
   },
   {
@@ -90,7 +93,42 @@ openclaw devices approve <requestId>
 
 ## 前置准备
 
-确保 Hermes 服务正在运行。
+安装 Hermes CLI：
+
+\`\`\`bash
+# 官方安装脚本
+curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+
+# 或通过 pip
+pip install hermes-agent
+\`\`\`
+
+验证安装：
+
+\`\`\`bash
+hermes --help
+hermes status
+\`\`\`
+
+## 连接模式
+
+Hermes 适配器支持两种连接模式：
+
+### CLI 模式（默认）
+
+不填写 URL 时自动使用 CLI 模式。Dashboard 通过调用本地 \`hermes\` 命令与 Agent 交互：
+- \`hermes profile list\` — 列出可用配置
+- \`hermes chat -q "prompt" --quiet\` — 发送消息
+- \`hermes sessions list\` — 列出会话
+- \`hermes insights\` — 查看 Token 使用情况
+
+### API Server 模式
+
+填写 URL 时使用 API Server 模式（需要 Hermes Gateway 启用 API Server 平台，默认端口 8642）：
+
+\`\`\`
+URL: http://127.0.0.1:8642
+\`\`\`
 
 ## 在 Dashboard 添加连接
 
@@ -99,12 +137,14 @@ openclaw devices approve <requestId>
 3. 填写信息：
    - 连接名称：如「我的 Hermes」
    - 类型：选择 Hermes
-   - URL：Hermes API 地址
-   - Token：认证令牌（如需要）
+   - URL：留空使用 CLI 模式，或填写 API 地址
+   - Token：API 模式的认证令牌（CLI 模式不需要）
 
 ## 验证连接
 
-设置页会显示「已连接」状态，Agent 列表自动加载。`,
+设置页会显示「已连接」状态，Agent 列表自动加载。
+
+> **注意**：CLI 模式仅支持本地运行。如果 Hermes 安装在远程服务器，请使用 API Server 模式。`,
     category: '连接指南',
   },
   {
@@ -114,7 +154,16 @@ openclaw devices approve <requestId>
 
 ## 前置准备
 
-确保 DeerFlow 服务正在运行。
+启动 DeerFlow 服务（默认端口 2026）：
+
+\`\`\`bash
+# 克隆并启动
+git clone https://github.com/bytedance/deer-flow.git
+cd deer-flow
+# 参照官方 README 启动服务
+\`\`\`
+
+DeerFlow 通过 Nginx 反向代理提供统一 API（端口 2026），内部路由到 FastAPI Gateway 和 LangGraph Server。
 
 ## 在 Dashboard 添加连接
 
@@ -123,13 +172,65 @@ openclaw devices approve <requestId>
 3. 填写信息：
    - 连接名称：如「我的 DeerFlow」
    - 类型：选择 DeerFlow
-   - URL：DeerFlow API 地址
-   - Token：认证令牌（如需要）
+   - URL：\`http://127.0.0.1:2026\`（默认）
+   - Token：留空（DeerFlow 默认无认证）
+
+## 架构说明
+
+DeerFlow 2.0 是单 Agent + 动态 Sub-Agent 架构：
+- 通过 Skills 扩展能力
+- 支持 flash / standard / pro / ultra 四种执行模式
+- 使用 LangGraph Runs API 进行交互
 
 ## 验证连接
 
-设置页会显示「已连接」状态，Agent 列表自动加载。`,
+设置页会显示「已连接」状态，Agent 列表自动加载。
+
+> **注意**：DeerFlow 设计用于本地可信环境，默认只监听 127.0.0.1。远程部署需自行配置认证。`,
     category: '连接指南',
+  },
+  {
+    id: 'chat',
+    title: '聊天使用指南',
+    content: `# 聊天使用指南
+
+## 会话列表
+
+左侧显示所有聊天会话：
+
+- **系统通知**：工作流进度、工具调用等系统消息集中展示，不支持发送消息
+- **私聊**：与单个 Agent 的一对一对话，显示 Agent 名称和底座名称
+
+## 会话排序与未读提示
+
+- 有新消息的会话自动排到列表顶部
+- 未读消息显示红色徽章，切到该会话后自动清除
+
+## 流式输出
+
+Agent 回复采用流式输出，消息逐步呈现，实时更新。
+
+## 聊天历史
+
+聊天记录持久化保存，刷新或重新打开 Dashboard 后可查看完整对话。
+
+## 斜杠命令
+
+在输入框中输入斜杠命令可以触发特殊功能：
+
+- \`/ec <需求>\` — 让 Agent 帮忙创建 ExCard
+- \`/ec-modify <card-id> <需求>\` — 让 Agent 帮忙修改已有 ExCard
+
+示例：
+
+\`\`\`
+/ec 创建一个每日汇总报告的 ExCard
+\`\`\`
+
+## Agent 离线
+
+当 Agent 离线时，发送消息会提示「Agent 离线，无法发送消息」。请在设置页检查底座连接状态。`,
+    category: '使用指南',
   },
   {
     id: 'job',
@@ -181,44 +282,206 @@ openclaw devices approve <requestId>
 
 ## 什么是 ExCard
 
-ExCard 是 Markdown 格式的完整任务执行模板。
+ExCard（Execution Card）是场景化的执行标准，用 Markdown 格式定义 **"如何做"**（执行标准），而非 **"做什么"**（任务列表）。它将 Agent 的执行经验从"记忆"转化为"约定"，确保工作流可重复、可追溯。
+
+## 命名规范
+
+\`\`\`
+EC-{XXX}-{descriptive-name}.md
+\`\`\`
+
+- \`XXX\` 为3位编号（001, 002, ...）
+- 名称使用小写英文和连字符
+- 示例：\`EC-001-daily-report\`、\`EC-002-social-prospecting\`
+
+## 必需的三个核心 Section
+
+每个 ExCard **必须**包含以下三个 Section，否则不完整：
+
+### 1. Resource Dependencies — 资源依赖
+
+列出执行所需的所有技能、文件、工具等资源，每个资源用子标题+清单描述：
+
+\`\`\`markdown
+## Resource Dependencies
+
+### style_fingerprint
+- **Type**: Skill
+- **Source**: Skills_Repo
+- **Path**: skills/style_fingerprint/
+- **Purpose**: 加载写作风格
+
+### 写作自检清单
+- **Type**: File
+- **Source**: User-defined
+- **Path**: 写作自检清单.md
+- **Purpose**: 质量检查标准
+\`\`\`
+
+Type 包括：\`Skill\`、\`File\`、\`Directory\`、\`Database\`、\`Config\`、\`API\`
+
+### 2. Execution Workflow — 执行工作流
+
+按步骤定义执行过程（3-15步），每个步骤包含：
+
+\`\`\`markdown
+## Execution Workflow
+
+### Step 1: 加载输入
+- **Action**: 读取主题标题和研究报告
+- **Tool Used**: file_reader
+- **Input**: 研究报告文件路径
+- **Output**: 结构化的研究数据
+- **Checkpoint**: 确认数据完整且格式正确
+
+### Step 2: 确定选题方向
+- **Action**: 分析研究数据，确定核心问题
+- **Tool Used**: style_fingerprint
+- **Input**: 研究数据
+- **Output**: 选题方向和角度
+- **Checkpoint**: 选题角度与目标受众匹配
+\`\`\`
+
+### 3. Execution Conventions — 执行约定
+
+定义输入输出规范和错误处理：
+
+\`\`\`markdown
+## Execution Conventions
+
+### Input Conventions
+- **数据来源**: memory/YYYY-MM-DD.md
+- **数据格式**: Markdown 格式的研究报告
+- **前置条件**: 研究数据文件已存在
+
+### Output Conventions
+- **保存位置**: articles/YYYY-MM-DD/[标题]-YYYY-MM-DD.md
+- **输出格式**: 完整的 Markdown 文章
+- **状态记录**: 更新 status.md 中的执行状态
+
+### Error Handling
+- **研究数据缺失**: 使用搜索技能补充
+- **风格指纹未找到**: 使用默认风格
+- **质量检查未通过**: 返回修订，最多3次
+\`\`\`
+
+## 完整模板示例
+
+\`\`\`markdown
+# EC-001: 每日汇总报告
+
+## Resource Dependencies
+
+### rss_reader
+- **Type**: Skill
+- **Source**: Skills_Repo
+- **Path**: skills/rss_reader/
+- **Purpose**: RSS 数据采集
+
+### summarizer
+- **Type**: Skill
+- **Source**: Skills_Repo
+- **Path**: skills/summarizer/
+- **Purpose**: 内容摘要生成
+
+### 输出目录
+- **Type**: Directory
+- **Source**: Auto-created
+- **Path**: reports/YYYY-MM-DD/
+- **Purpose**: 报告保存
+
+## Execution Workflow
+
+### Step 1: 采集数据源
+- **Action**: 从配置的 RSS 源采集最近24小时的内容
+- **Tool Used**: rss_reader
+- **Input**: RSS 订阅列表
+- **Output**: 原始文章列表
+- **Checkpoint**: 至少采集到5篇文章
+
+### Step 2: 生成摘要
+- **Action**: 对每篇文章提取关键信息并生成摘要
+- **Tool Used**: summarizer
+- **Input**: 原始文章列表
+- **Output**: 结构化摘要数据
+- **Checkpoint**: 每篇摘要不超过200字
+
+### Step 3: 编排报告
+- **Action**: 按主题分类摘要，生成完整报告
+- **Tool Used**: -
+- **Input**: 结构化摘要数据
+- **Output**: 完整的 Markdown 报告
+- **Checkpoint**: 报告包含分类标题和摘要
+
+### Step 4: 保存交付
+- **Action**: 保存报告到输出目录
+- **Tool Used**: file_writer
+- **Input**: 完整报告内容
+- **Output**: 保存路径确认
+- **Checkpoint**: 文件成功写入
+
+## Execution Conventions
+
+### Input Conventions
+- **数据来源**: RSS 订阅配置
+- **时间范围**: 最近24小时
+- **前置条件**: RSS 源配置正确
+
+### Output Conventions
+- **保存位置**: reports/YYYY-MM-DD/daily-report.md
+- **输出格式**: Markdown 报告
+- **状态记录**: 更新 last-run.md
+
+### Error Handling
+- **RSS 源不可达**: 跳过该源，记录警告
+- **采集内容为空**: 使用缓存数据
+- **摘要生成失败**: 保留原文前200字
+\`\`\`
+
+## 可选 Section
+
+| Section | 说明 |
+|---------|------|
+| \`## Applicable Scenarios\` | 适用场景、触发条件、执行频率 |
+| \`## Quality Redlines\` | 不可违反的硬性规则 |
+| \`## Mode Details\` | 多模式 ExCard 的各模式说明 |
+| \`## Changelog\` | 版本变更记录 |
 
 ## 创建 ExCard
 
+### 方式一：手动创建
+
 1. 进入 ExCard 页面
 2. 点击「新建 ExCard」
-3. 填写：
-   - 标题：ExCard 名称
-   - 描述：用途说明
-   - 内容：Markdown 格式的完整模板
-   - 绑定 Agent：指定默认执行的 Agent
+3. 填写名称和描述
+4. 按 Markdown 格式编写内容
+5. 绑定默认 Agent
 
-## ExCard 内容格式
+### 方式二：通过聊天让 Agent 创建
 
-\`\`\`markdown
-# ExCard 标题
+使用 \`/ec\` 斜杠命令：
 
-## 任务描述
-
-详细描述任务...
-
-## 执行步骤
-
-1. 第一步...
-2. 第二步...
-
-## 输出格式
-
-要求 Agent 按格式输出...
 \`\`\`
+/ec 创建一个每日汇总报告的 ExCard，功能包括收集当天的信息并生成报告
+\`\`\`
+
+Agent 会返回 \`[EXCARD_PROPOSAL]\` 格式的提案，Dashboard 弹出确认框，你可以在确认前修改内容。
+
+### 方式三：修改已有 ExCard
+
+\`\`\`
+/ec-modify ec-abc123 增加一个质量检查步骤
+\`\`\`
+
+Agent 会获取现有内容并生成修改后的完整提案。
 
 ## 在工作中使用 ExCard
 
-编辑工作时，添加类型为「ExCard」的步骤，选择创建好的 ExCard。
+编辑工作时，添加类型为「ExCard」的步骤，选择已创建的 ExCard。工作流引擎会按步骤自动执行。
 
 ## 工作流返回格式
 
-Agent 完成后，需要返回：
+Agent 完成步骤后，需要返回：
 
 \`\`\`
 [WORKFLOW job-<jobId> step-<stepIndex>]
@@ -232,39 +495,7 @@ message: 完成情况描述
 [WORKFLOW job-<jobId> step-<stepIndex>]
 status: error
 message: 错误描述
-\`\`\`
-
-## 提议创建 ExCard
-
-如果 Agent 认为这个任务可以固化成 ExCard，可以在返回结果中包含：
-
-\`\`\`
-[EXCARD_PROPOSAL]
-name: ExCard 名称
-description: 描述这个 ExCard 的用途
-agent: <agent-id> (可选，默认当前 agent)
-markdown:
-# ExCard 标题
-## 任务描述
-这里写 ExCard 的完整 Markdown 内容
-...
-\`\`\`
-
-Dashboard 会自动检测到这个格式并弹出确认框。
-
-## 斜杠命令
-
-在聊天输入框中输入斜杠命令可以告诉 Agent 做什么：
-
-- \`/ec <需求>\` - 让 Agent 帮忙创建 ExCard
-- \`/ec-modify <card-id> <需求>\` - 让 Agent 帮忙修改已有 ExCard
-
-示例：
-\`\`\`
-/ec 创建一个每日汇总报告的 ExCard，功能包括收集当天的信息并生成报告
-\`\`\`
-
-Agent 收到后会返回 \`[EXCARD_PROPOSAL]\` 格式的提议，确认后创建。`,
+\`\`\``,
     category: '使用指南',
   },
   {
@@ -301,7 +532,7 @@ Agent 收到后会返回 \`[EXCARD_PROPOSAL]\` 格式的提议，确认后创建
 
 ## 看板用途
 
-看板专门用于展示正在执行工作的进度。
+看板专门用于展示当前正在执行的工作进度，聚焦于活跃任务。
 
 ## 查看工作
 
@@ -321,7 +552,7 @@ Agent 收到后会返回 \`[EXCARD_PROPOSAL]\` 格式的提议，确认后创建
 
 ## 启动工作
 
-在工作页面点击「启动工作流」，或在看板的「其他工作」区域点击「启动」。`,
+在工作页面点击「启动工作流」，看板会自动加载并展示步骤进度。`,
     category: '使用指南',
   },
 ])

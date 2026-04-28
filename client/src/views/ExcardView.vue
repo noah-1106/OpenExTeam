@@ -532,7 +532,7 @@ function getCategoryLabel(category) {
               <div>
                 <label class="block text-xs font-medium text-primary mb-1">资源依赖</label>
                 <div class="flex items-center gap-2 mb-2">
-                  <input v-model="editNewResource" type="text" placeholder="添加资源..." class="flex-1 px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
+                  <input v-model="editNewResource" type="text" placeholder="例如：Skill/summarizer" class="flex-1 px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
                   <button @click="() => { if (editNewResource.trim() && !editData.resources.includes(editNewResource.trim())) { editData.resources.push(editNewResource.trim()); editNewResource = '' } }" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">添加</button>
                 </div>
                 <div class="flex flex-wrap gap-1.5">
@@ -550,10 +550,10 @@ function getCategoryLabel(category) {
                 <label class="block text-xs font-medium text-primary mb-1">执行工作流</label>
                 <div class="grid grid-cols-2 gap-3 mb-2">
                   <div class="col-span-2">
-                    <input v-model="editNewStepName" type="text" placeholder="步骤名称..." class="w-full px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
+                    <input v-model="editNewStepName" type="text" placeholder="例如：采集数据源" class="w-full px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
                   </div>
                   <div class="col-span-2">
-                    <textarea v-model="editNewStepDesc" rows="1" placeholder="步骤描述..." class="w-full px-3 py-1.5 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                    <textarea v-model="editNewStepDesc" rows="1" placeholder="Action / Input / Output" class="w-full px-3 py-1.5 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
                   </div>
                 </div>
                 <button @click="() => { if (editNewStepName.trim()) { editData.workflow.push({ index: editData.workflow.length + 1, name: editNewStepName.trim(), description: editNewStepDesc.trim() }); editNewStepName = ''; editNewStepDesc = '' } }" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover mb-2">添加步骤</button>
@@ -624,11 +624,11 @@ function getCategoryLabel(category) {
               <h4 class="text-sm font-semibold text-primary border-b border-border pb-1">基本信息</h4>
               <div>
                 <label class="block text-sm font-medium text-primary mb-1">名称 <span class="text-red-500">*</span></label>
-                <input v-model="newExcard.name" type="text" placeholder="例如：标准文章创作" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent" />
+                <input v-model="newExcard.name" type="text" placeholder="例如：EC-001-daily-report" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-primary mb-1">描述</label>
-                <textarea v-model="newExcard.description" rows="2" placeholder="描述这个 ExCard 的用途和使用场景..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                <textarea v-model="newExcard.description" rows="2" placeholder="一句话描述这个 ExCard 的用途和使用场景..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
@@ -669,7 +669,7 @@ function getCategoryLabel(category) {
             <div class="space-y-3">
               <h4 class="text-sm font-semibold text-primary border-b border-border pb-1">资源依赖</h4>
               <div class="flex items-center gap-2">
-                <input v-model="newResource" type="text" placeholder="添加资源..." class="flex-1 px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
+                <input v-model="newResource" type="text" placeholder="例如：Skill/summarizer" class="flex-1 px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
                 <button @click="addResource" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">添加</button>
               </div>
               <div class="flex flex-wrap gap-1.5">
@@ -689,11 +689,11 @@ function getCategoryLabel(category) {
               <div class="grid grid-cols-2 gap-3">
                 <div class="col-span-2">
                   <label class="block text-sm font-medium text-primary mb-1">步骤名称</label>
-                  <input v-model="newStepName" type="text" placeholder="步骤名称..." class="w-full px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
+                  <input v-model="newStepName" type="text" placeholder="例如：采集数据源" class="w-full px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
                 </div>
                 <div class="col-span-2">
                   <label class="block text-sm font-medium text-primary mb-1">步骤描述</label>
-                  <textarea v-model="newStepDesc" rows="2" placeholder="描述这个步骤要做什么..." class="w-full px-3 py-1.5 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                  <textarea v-model="newStepDesc" rows="2" placeholder="具体执行动作和验证标准..." class="w-full px-3 py-1.5 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
                 </div>
               </div>
               <button @click="addStep" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">添加步骤</button>
@@ -713,15 +713,15 @@ function getCategoryLabel(category) {
               <h4 class="text-sm font-semibold text-primary border-b border-border pb-1">执行约定</h4>
               <div>
                 <label class="block text-sm font-medium text-primary mb-1">输入约定</label>
-                <textarea v-model="newExcard.conventions.input" rows="2" placeholder="定义输入格式和要求..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                <textarea v-model="newExcard.conventions.input" rows="2" placeholder="数据来源路径、格式要求、前置条件..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-primary mb-1">输出约定</label>
-                <textarea v-model="newExcard.conventions.output" rows="2" placeholder="定义输出格式和要求..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                <textarea v-model="newExcard.conventions.output" rows="2" placeholder="保存位置、输出格式、状态记录..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-primary mb-1">错误处理</label>
-                <textarea v-model="newExcard.conventions.errorHandling" rows="2" placeholder="定义错误处理逻辑..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                <textarea v-model="newExcard.conventions.errorHandling" rows="2" placeholder="错误场景及处理方式（表格格式）..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
               </div>
             </div>
           </div>
