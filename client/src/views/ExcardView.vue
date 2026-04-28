@@ -111,8 +111,9 @@ function resetForm() {
 
 function addResource() {
   if (!newResource.value.trim()) return
-  if (!newExcard.value.resources.includes(newResource.value.trim())) {
-    newExcard.value.resources.push(newResource.value.trim())
+  const name = newResource.value.trim()
+  if (!newExcard.value.resources.some(r => (typeof r === 'object' ? r.name : r) === name)) {
+    newExcard.value.resources.push({ name, type: '', source: '', path: '', purpose: '' })
   }
   newResource.value = ''
 }
@@ -229,6 +230,7 @@ function parseExcardMd(mdContent) {
   const lines = mdContent.split('\n')
   let currentSection = ''
   let currentStep = null
+  let currentResource = null
   let inFrontmatter = false
 
   for (let i = 0; i < lines.length; i++) {
@@ -283,14 +285,59 @@ function parseExcardMd(mdContent) {
 
     // 解析各 section 内容
     if (currentSection === 'resource dependencies') {
-      if (line.startsWith('- ') || line.startsWith('* ')) {
+      if (line.startsWith('### ')) {
+        // Finalize previous resource
+        if (currentResource && currentResource.name) {
+          excard.resources.push(currentResource)
+        }
+        const resName = line.slice(4).trim()
+        if (resName) {
+          currentResource = { name: resName, type: '', source: '', path: '', purpose: '' }
+        }
+      } else if (currentResource && line.match(/^-\s+\*\*/)) {
+        // Key-value within resource sub-heading: - **Key**: value
+        const kvMatch = line.match(/^-\s+\*\*(.*?)\*\*:\s*(.*)$/)
+        if (kvMatch) {
+          const key = kvMatch[1].trim().toLowerCase()
+          const value = kvMatch[2].trim()
+          if (key === 'type') currentResource.type = value
+          else if (key === 'source') currentResource.source = value
+          else if (key === 'path') currentResource.path = value
+          else if (key === 'purpose') currentResource.purpose = value
+        }
+      } else if ((line.startsWith('- ') || line.startsWith('* ')) && !currentResource) {
+        // Simple list format (only when not inside a sub-heading resource)
         const resourceText = line.slice(2).trim()
         excard.resources.push(resourceText)
+      } else if (line.trim() === '' && currentResource) {
+        // Blank line = end of current resource
+        if (currentResource.name) {
+          excard.resources.push(currentResource)
+        }
+        currentResource = null
       }
     }
 
     if (currentSection === 'execution workflow') {
-      if (line.match(/^\d+\.\s/)) {
+      // ### Step N: name format
+      if (line.match(/^###\s+step\s+\d+/i)) {
+        if (currentStep) excard.workflow.push(currentStep)
+        const stepMatch = line.match(/^###\s+[Ss]tep\s+(\d+)\s*[:：]?\s*(.*)$/)
+        if (stepMatch) {
+          currentStep = {
+            index: parseInt(stepMatch[1]),
+            name: stepMatch[2].trim(),
+            description: '',
+            action: '',
+            tool: '',
+            input: '',
+            output: '',
+            checkpoint: ''
+          }
+        }
+      }
+      // Numbered list format: 1. **name** description
+      else if (line.match(/^\d+\.\s/)) {
         if (currentStep) excard.workflow.push(currentStep)
         const stepMatch = line.match(/^(\d+)\.\s\*\*(.*?)\*\*(.*)$/)
         if (stepMatch) {
@@ -308,8 +355,20 @@ function parseExcardMd(mdContent) {
           }
         }
       } else if (currentStep && line) {
-        // 继续追加步骤描述
-        if (!line.toLowerCase().startsWith('agent:')) {
+        // Parse key-value pairs in Step sub-heading format
+        const kvMatch = line.match(/^-\s+\*\*(.*?)\*\*:\s*(.*)$/)
+        if (kvMatch) {
+          const key = kvMatch[1].trim().toLowerCase()
+          const value = kvMatch[2].trim()
+          if (key === 'action') currentStep.action = value
+          else if (key === 'tool used' || key === 'tool') currentStep.tool = value
+          else if (key === 'input') currentStep.input = value
+          else if (key === 'output') currentStep.output = value
+          else if (key === 'checkpoint') currentStep.checkpoint = value
+          else if (key === 'description') currentStep.description = value
+        }
+        // Fallback: append to description for numbered list format
+        else if (!line.toLowerCase().startsWith('agent:')) {
           if (currentStep.description) currentStep.description += '\n' + rawLine.trim()
           else currentStep.description = rawLine.trim()
         }
@@ -318,7 +377,8 @@ function parseExcardMd(mdContent) {
 
     if (currentSection === 'execution conventions') {
       if (line.toLowerCase().startsWith('### input') || line.toLowerCase().startsWith('## input') ||
-          line.toLowerCase().includes('### 输入') || line.toLowerCase().includes('## 输入')) {
+          line.toLowerCase().includes('### 输入') || line.toLowerCase().includes('## 输入') ||
+          line.toLowerCase().includes('input conventions')) {
         let j = i + 1
         let content = ''
         while (j < lines.length && (lines[j].trim() === '' || !lines[j].trim().startsWith('#'))) {
@@ -329,7 +389,8 @@ function parseExcardMd(mdContent) {
         }
         excard.conventions.input = content
       } else if (line.toLowerCase().startsWith('### output') || line.toLowerCase().startsWith('## output') ||
-                 line.toLowerCase().includes('### 输出') || line.toLowerCase().includes('## 输出')) {
+                 line.toLowerCase().includes('### 输出') || line.toLowerCase().includes('## 输出') ||
+                 line.toLowerCase().includes('output conventions')) {
         let j = i + 1
         let content = ''
         while (j < lines.length && (lines[j].trim() === '' || !lines[j].trim().startsWith('#'))) {
@@ -361,6 +422,7 @@ function parseExcardMd(mdContent) {
   }
 
   if (currentStep) excard.workflow.push(currentStep)
+  if (currentResource && currentResource.name) excard.resources.push(currentResource)
 
   return excard
 }
@@ -533,17 +595,21 @@ function getCategoryLabel(category) {
                 <label class="block text-xs font-medium text-primary mb-1">资源依赖</label>
                 <div class="flex items-center gap-2 mb-2">
                   <input v-model="editNewResource" type="text" placeholder="例如：Skill/summarizer" class="flex-1 px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
-                  <button @click="() => { if (editNewResource.trim() && !editData.resources.includes(editNewResource.trim())) { editData.resources.push(editNewResource.trim()); editNewResource = '' } }" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">添加</button>
+                  <button @click="() => { if (editNewResource.trim() && !editData.resources.some(r => (typeof r === 'object' ? r.name : r) === editNewResource.trim())) { editData.resources.push({ name: editNewResource.trim(), type: '', source: '', path: '', purpose: '' }); editNewResource = '' } }" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">添加</button>
                 </div>
-                <div class="flex flex-wrap gap-1.5">
-                  <span
-                    v-for="(res, idx) in editData.resources"
-                    :key="idx"
-                    class="px-2 py-0.5 rounded text-xs bg-surface-raised text-secondary flex items-center gap-1"
-                  >
-                    📦 {{ res }}
-                    <button @click="() => editData.resources.splice(idx, 1)" class="hover:text-red-500">×</button>
-                  </span>
+                <div class="space-y-1.5">
+                  <div v-for="(res, idx) in editData.resources" :key="idx" class="flex items-start gap-2 p-2 bg-surface-raised rounded-lg text-sm">
+                    <span class="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex-shrink-0">{{ typeof res === 'object' ? (res.type || 'Res') : 'Res' }}</span>
+                    <div class="flex-1 min-w-0">
+                      <div class="font-medium text-primary">{{ typeof res === 'object' ? res.name : res }}</div>
+                      <div v-if="typeof res === 'object' && (res.source || res.purpose)" class="text-xs text-muted mt-0.5">
+                        <span v-if="res.source">{{ res.source }}</span>
+                        <span v-if="res.source && res.purpose"> · </span>
+                        <span v-if="res.purpose">{{ res.purpose }}</span>
+                      </div>
+                    </div>
+                    <button @click="() => editData.resources.splice(idx, 1)" class="text-red-500 hover:text-red-600">×</button>
+                  </div>
                 </div>
               </div>
               <div>
@@ -672,15 +738,19 @@ function getCategoryLabel(category) {
                 <input v-model="newResource" type="text" placeholder="例如：Skill/summarizer" class="flex-1 px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
                 <button @click="addResource" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">添加</button>
               </div>
-              <div class="flex flex-wrap gap-1.5">
-                <span
-                  v-for="(res, idx) in newExcard.resources"
-                  :key="idx"
-                  class="px-2 py-0.5 rounded text-xs bg-surface-raised text-secondary flex items-center gap-1"
-                >
-                  📦 {{ res }}
-                  <button @click="removeResource(idx)" class="hover:text-red-500">×</button>
-                </span>
+              <div class="space-y-1.5">
+                <div v-for="(res, idx) in newExcard.resources" :key="idx" class="flex items-start gap-2 p-2 bg-surface-raised rounded-lg text-sm">
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex-shrink-0">{{ typeof res === 'object' ? (res.type || 'Res') : 'Res' }}</span>
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium text-primary">{{ typeof res === 'object' ? res.name : res }}</div>
+                    <div v-if="typeof res === 'object' && (res.source || res.purpose)" class="text-xs text-muted mt-0.5">
+                      <span v-if="res.source">{{ res.source }}</span>
+                      <span v-if="res.source && res.purpose"> · </span>
+                      <span v-if="res.purpose">{{ res.purpose }}</span>
+                    </div>
+                  </div>
+                  <button @click="removeResource(idx)" class="text-red-500 hover:text-red-600">×</button>
+                </div>
               </div>
             </div>
 
