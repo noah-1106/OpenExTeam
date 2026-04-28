@@ -19,10 +19,6 @@ const activeJobs = computed(() => {
   return props.jobs.filter(job => job.status === 'in-progress')
 })
 
-const otherJobs = computed(() => {
-  return props.jobs.filter(job => job.status !== 'in-progress')
-})
-
 async function loadJobSteps(jobId) {
   try {
     const data = await api.getJobSteps(jobId)
@@ -289,35 +285,11 @@ watch(activeJobs, (newJobs) => {
         <div class="text-base font-medium">选择上方正在执行的工作查看进度</div>
       </div>
 
-      <!-- 如果没有正在执行的工作，显示其他工作 -->
-      <div v-else>
-        <h3 class="text-sm font-semibold text-secondary mb-3">其他工作</h3>
-        <div v-if="otherJobs.length > 0" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <div v-for="job in otherJobs" :key="job.id"
-               class="bg-surface rounded-xl border border-border-subtle p-5 shadow-xs hover:shadow-sm transition-shadow">
-            <div class="flex items-start justify-between mb-3">
-              <div>
-                <div class="font-semibold text-primary text-sm">{{ job.title }}</div>
-                <p class="text-xs text-muted mt-1">{{ job.description }}</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 mb-4">
-              <span :class="['text-xs px-2 py-0.5 rounded-md font-medium',
-                            job.status === 'done' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600']">
-                {{ job.status === 'done' ? '已完成' : '未开始' }}
-              </span>
-            </div>
-            <button @click="startWorkflow(job.id)"
-                    class="w-full py-1.5 bg-accent text-white rounded-lg text-xs font-medium hover:bg-accent-hover transition-colors">
-              ▶ 启动
-            </button>
-          </div>
-        </div>
-        <div v-else class="flex flex-col items-center justify-center py-24 text-muted">
-          <div class="text-5xl mb-3">📋</div>
-          <div class="text-base font-medium">暂无数工作</div>
-          <div class="text-sm mt-1">在「工作」tab中创建工作</div>
-        </div>
+      <!-- 如果没有正在执行的工作 -->
+      <div v-else class="flex flex-col items-center justify-center py-24 text-muted">
+        <div class="text-5xl mb-3">📋</div>
+        <div class="text-base font-medium">当前没有正在执行的工作</div>
+        <div class="text-sm mt-1">在「工作」tab中创建并启动工作</div>
       </div>
     </div>
   </div>

@@ -4,7 +4,7 @@
  */
 
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import api from '../api/client';
 import { createSSEConnection } from '../api/sse';
 
@@ -30,6 +30,8 @@ export const useChatStore = defineStore('chat', () => {
         name: '系统通知',
         avatarUrl: null,
         messages: [],
+        unreadCount: 0,
+        lastMessageTime: 0,
       };
       sessions.value.unshift(systemSess); // 放在最前面
     }
@@ -50,15 +52,28 @@ export const useChatStore = defineStore('chat', () => {
 
         console.log('[Chat] Received message:', { messageId, state, agent: msgAgent, from: msg.from, type: msg.type, content });
 
-        // 检查是否是系统消息（工作流通知）
-        if (msg.from === 'system' || msg.type?.startsWith('workflow_') || msg.type?.startsWith('message_')) {
+        // 检查是否是系统消息（工作流通知 + 工具调用）
+        if (msg.from === 'system' || msg.type?.startsWith('workflow_') || msg.type?.startsWith('message_') || msg.type === 'tool_chat') {
           console.log('[Chat] System/workflow message, routing to system session');
           const systemSess = ensureSystemSession();
 
-          // 添加系统消息
+          // 格式化系统消息为可读文本，避免显示原始 JSON
           const timeStr = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-          const displayContent = typeof content === 'string' ? content :
-                               (content.title ? `${content.title}\n${content.message || ''}` : JSON.stringify(content));
+          let displayContent;
+          if (typeof content === 'string') {
+            displayContent = content;
+          } else if (content && typeof content === 'object') {
+            // 提取可读字段
+            const parts = [];
+            if (content.title) parts.push(content.title);
+            if (content.message) parts.push(content.message);
+            if (content.step) parts.push(`步骤: ${content.step}`);
+            if (content.stepName) parts.push(content.stepName);
+            if (content.status) parts.push(`状态: ${content.status}`);
+            displayContent = parts.length > 0 ? parts.join(' — ') : `[${msg.type || 'system'}]`;
+          } else {
+            displayContent = `[${msg.type || 'system'}]`;
+          }
           systemSess.messages.push({
             sender: 'system',
             text: displayContent,
@@ -66,6 +81,10 @@ export const useChatStore = defineStore('chat', () => {
             jobId: msg.jobId,
             msgType: msg.type
           });
+          systemSess.lastMessageTime = Date.now();
+          if (activeSessionId.value !== systemSess.id) {
+            systemSess.unreadCount = (systemSess.unreadCount || 0) + 1;
+          }
 
           // 如果当前没有选中会话，自动选中系统会话
           if (!activeSessionId.value) {
@@ -116,7 +135,24 @@ export const useChatStore = defineStore('chat', () => {
           }
         }
 
-        // 新消息
+        // 对于非 final 的消息（delta/流式），尝试更新同一 agent 的最后一条消息
+        if (state !== 'final') {
+          const lastMsg = sess.messages[sess.messages.length - 1];
+          if (lastMsg && lastMsg.sender === msgAgent && lastMsg.sender !== 'user') {
+            lastMsg.text = content;
+            // 开始跟踪这个流
+            if (messageId) {
+              streamingMessages.value.set(messageId, {
+                sessionId: sess.id,
+                messageIndex: sess.messages.length - 1,
+              });
+              console.log('[Chat] Attached stream to last message:', messageId);
+            }
+            return;
+          }
+        }
+
+        // 新消息（仅 final 状态或首条消息）
         const newMessage = {
           sender: msgAgent,
           agentId: msgAgent,
@@ -125,6 +161,10 @@ export const useChatStore = defineStore('chat', () => {
         };
         sess.messages.push(newMessage);
         console.log('[Chat] Added new message, total:', sess.messages.length);
+        sess.lastMessageTime = Date.now();
+        if (activeSessionId.value !== sess.id) {
+          sess.unreadCount = (sess.unreadCount || 0) + 1;
+        }
 
         // 如果是 delta 状态，开始跟踪
         if (messageId && (state === 'delta' || state !== 'final')) {
@@ -180,10 +220,13 @@ export const useChatStore = defineStore('chat', () => {
         name: '系统通知',
         avatarUrl: null,
         messages: systemMessages,
+        unreadCount: 0,
+        lastMessageTime: 0,
       });
     }
 
     // 为每个 Agent 创建私聊会话
+    // 始终追加底座名称以区分不同适配器的 agent
     agentList.forEach(ag => {
       const sessionId = `p2p-${ag.id}`;
       const savedMessages = existingMessages.get(sessionId) || [];
@@ -193,7 +236,10 @@ export const useChatStore = defineStore('chat', () => {
         name: ag.name,
         avatarUrl: ag.avatarUrl || null,
         agentId: ag.id,
+        adapterName: ag.adapter || ag.id.split(':')[0],
         messages: savedMessages,
+        unreadCount: 0,
+        lastMessageTime: 0,
       });
     });
 
@@ -294,16 +340,25 @@ export const useChatStore = defineStore('chat', () => {
         if (data.messages && data.messages.length > 0) {
           // 转换历史消息格式
           const historyMessages = data.messages.map(msg => {
-            const content = msg.content ? (typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)) : '';
+            let content = msg.content ? (typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)) : '';
+            // Migration guard: old data stored strings with JSON.stringify, adding extra quotes
+            if (content.startsWith('"') && content.endsWith('"')) {
+              try { content = JSON.parse(content); } catch {}
+            }
+            // Fix timezone: old timestamps like "2026-04-27 14:02:36" are UTC but lack the Z suffix
+            let ts = msg.timestamp;
+            if (ts && !ts.includes('T')) {
+              ts = ts.replace(' ', 'T') + 'Z';
+            }
             return {
               sender: msg.from_agent === 'dashboard' ? 'user' : (msg.from_agent || 'system'),
               text: content,
-              time: new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+              time: new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
               isHistory: true
             };
           });
-          // 历史消息插入到前面
-          sess.messages = [...historyMessages, ...sess.messages];
+          // 用完整历史替换当前消息（服务端已包含用户和 agent 双方消息）
+          sess.messages = historyMessages;
           loadedHistories.value.add(sessionId);
           console.log('[Chat] Loaded', historyMessages.length, 'history messages');
         }
@@ -316,6 +371,8 @@ export const useChatStore = defineStore('chat', () => {
   // 切换会话
   function selectSession(id) {
     activeSessionId.value = id;
+    const sess = sessions.value.find(s => s.id === id);
+    if (sess) sess.unreadCount = 0;
     loadSessionHistory(id);
   }
 
@@ -323,6 +380,17 @@ export const useChatStore = defineStore('chat', () => {
   function activeSession() {
     return sessions.value.find(s => s.id === activeSessionId.value) || null;
   }
+
+  // 按 lastMessageTime 排序的 p2p 会话（最近的在最上面）
+  const sortedP2pSessions = computed(() => {
+    return [...sessions.value.filter(s => s.type === 'p2p')]
+      .sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
+  });
+
+  // 总未读数（用于全局提示）
+  const totalUnread = computed(() => {
+    return sessions.value.reduce((sum, s) => sum + (s.unreadCount || 0), 0);
+  });
 
   // 添加新会话（群聊）
   function addGroupSession(name, participantIds) {
@@ -333,6 +401,8 @@ export const useChatStore = defineStore('chat', () => {
       avatarUrl: null,
       agentIds: participantIds,
       messages: [],
+      unreadCount: 0,
+      lastMessageTime: 0,
     });
   }
 
@@ -344,6 +414,8 @@ export const useChatStore = defineStore('chat', () => {
     activeSessionId,
     agents,
     loadedHistories,
+    sortedP2pSessions,
+    totalUnread,
     connectSSE,
     initSessions,
     sendMessage,

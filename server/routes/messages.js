@@ -58,8 +58,8 @@ function setupMessagesRoutes(app, activeAdapters) {
 
     const messageContent = content || message;
     const messageId = uuidv4();
-    queryRun('INSERT INTO message_log (id,type,from_agent,to_agent,content) VALUES (?,?,?,?,?)',
-      [messageId, type || 'chat', 'dashboard', agentId, JSON.stringify(messageContent)]);
+    queryRun('INSERT INTO message_log (id,type,from_agent,to_agent,content,timestamp) VALUES (?,?,?,?,?,?)',
+      [messageId, type || 'chat', 'dashboard', agentId, typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent), new Date().toISOString()]);
 
     const adapter = activeAdapters.get(adapterName);
     if (!adapter) {

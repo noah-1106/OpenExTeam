@@ -231,9 +231,6 @@ async function handleDisconnect(conn) {
                     {{ isAdapterConnected(conn) ? '已连接' : '未连接' }}
                   </span>
                 </div>
-                <p class="text-xs text-muted mt-1">
-                  上次心跳: {{ conn.lastHeartbeat || '刚刚' }}
-                </p>
               </div>
               <div class="flex items-center gap-2">
                 <button

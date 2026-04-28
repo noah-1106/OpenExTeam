@@ -6,7 +6,8 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { initDb } = require('./models/db');
+const { v4: uuidv4 } = require('uuid');
+const { initDb, queryRun } = require('./models/db');
 const { setupSSE, broadcast } = require('./events/sse');
 const { loadConfig, saveConfig } = require('./config');
 const { handleAgentReply, setActiveWorkflowsRef, setActiveAdaptersRef, startWorkflow } = require('./services/workflow');
@@ -92,8 +93,22 @@ async function initSingleAdapter(ac) {
     adapter.on('message', parsed => {
       broadcast('agent_message', parsed);
 
-      // 检查是否是工作流回复
+      // Persist agent message to message_log for history retrieval
       const agentName = parsed.from || parsed.agent;
+      const content = parsed.content || parsed.text || parsed.output || '';
+      const msgState = parsed.state; // "delta" or "final"
+      // Only persist final messages to avoid duplicate incomplete entries from streaming
+      if (agentName && content && (msgState === 'final' || !msgState)) {
+        try {
+          queryRun('INSERT INTO message_log (id, type, from_agent, to_agent, content, timestamp) VALUES (?,?,?,?,?,?)',
+            [uuidv4(), parsed.type || 'chat', agentName, 'dashboard', typeof content === 'string' ? content : JSON.stringify(content), new Date().toISOString()]);
+        } catch (err) {
+          console.warn('[Adapter] Failed to persist message to log:', err.message);
+        }
+      }
+
+      // 检查是否是工作流回复
+      // (agentName already declared above)
       if (agentName && activeWorkflows.has(agentName)) {
         const jobId = activeWorkflows.get(agentName);
         console.log(`[Workflow] Got reply from ${agentName} for job ${jobId}`);

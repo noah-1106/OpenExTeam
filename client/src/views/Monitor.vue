@@ -178,6 +178,7 @@ onUnmounted(() => {
           <div class="flex-1 min-w-0">
             <h3 class="font-medium text-primary">
               {{ agent.name }}
+              <span class="ml-1 text-xs text-muted font-normal">{{ agent.adapter }}</span>
               <span v-if="agent.connected === false" class="ml-2 px-2 py-0.5 text-xs bg-red-50 text-red-500 rounded">已解绑</span>
             </h3>
             <p :class="['text-sm mt-0.5', statusConfig[agent.status] ? statusConfig[agent.status].color : '']">

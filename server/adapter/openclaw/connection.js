@@ -535,11 +535,31 @@ class ConnectionManager extends EventEmitter {
   _parseChatEvent(payload) {
     if (!payload?.message) return null;
     const msg = payload.message;
-    const content = msg.content?.[0]?.text || '';
+
+    // Extract text content and detect tool usage from content array
+    const contentItems = msg.content || [];
+    const textParts = [];
+    let hasToolUse = false;
+
+    for (const item of contentItems) {
+      if (item.type === 'text' && item.text) {
+        textParts.push(item.text);
+      } else if (item.type === 'tool_use' || item.type === 'tool_result') {
+        hasToolUse = true;
+      }
+    }
+
+    // If all content is tool-related (no text), skip emitting as chat message
+    if (hasToolUse && textParts.length === 0) {
+      return null;
+    }
+
+    const content = textParts.join('');
+    if (!content) return null;
 
     return {
       messageId: payload.runId || payload.seq,
-      type: 'chat',
+      type: hasToolUse ? 'tool_chat' : 'chat',
       agent: `${this.name}:${this._extractAgentId(payload.sessionKey)}`,
       content,
       timestamp: msg.timestamp || new Date().toISOString(),

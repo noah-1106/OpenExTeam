@@ -99,8 +99,6 @@ async function handleCreateExcard(data) {
       await api.updateExcardMd(data.id, data.markdown)
       console.log('[Chat] ExCard Markdown 更新成功')
 
-      console.log('[Chat] ExCard Markdown 更新成功')
-
       // 刷新 ExCard 列表
       await boardStore.fetchAll()
 
@@ -342,16 +340,6 @@ watch(() => activeSession.value?.messages, (newMessages, oldMessages) => {
   }
 }, { deep: true })
 
-function getLastMessage(sess) {
-  if (!sess.messages.length) return ''
-  return sess.messages[sess.messages.length - 1].text
-}
-
-function getLastTime(sess) {
-  if (!sess.messages.length) return ''
-  return sess.messages[sess.messages.length - 1].time
-}
-
 function getStatusColor(agent) {
   const colors = { online: 'bg-green-400', busy: 'bg-yellow-400', offline: 'bg-gray-300' }
   return colors[agent?.status] || 'bg-gray-300'
@@ -390,9 +378,8 @@ function getStatusColor(agent) {
                 <span :class="['text-sm font-medium', chatStore.activeSessionId === sess.id ? 'text-accent' : 'text-primary']">
                   {{ sess.name }}
                 </span>
-                <span class="text-xs text-muted flex-shrink-0">{{ getLastTime(sess) }}</span>
+                <span v-if="sess.unreadCount" class="px-1.5 py-0.5 text-[10px] bg-red-500 text-white rounded-full leading-none flex-shrink-0">{{ sess.unreadCount > 99 ? '99+' : sess.unreadCount }}</span>
               </div>
-              <p class="text-xs text-secondary truncate mt-0.5">{{ getLastMessage(sess) }}</p>
             </div>
           </div>
         </div>
@@ -400,7 +387,7 @@ function getStatusColor(agent) {
         <div class="px-3 mb-1">
           <div class="text-xs font-semibold text-muted uppercase tracking-wide px-2 py-1">单聊</div>
           <div
-            v-for="sess in chatStore.sessions.filter(s => s.type === 'p2p')"
+            v-for="sess in chatStore.sortedP2pSessions"
             :key="sess.id"
             @click="selectSession(sess.id)"
             :class="[
@@ -426,9 +413,9 @@ function getStatusColor(agent) {
                   {{ sess.name }}
                   <span v-if="agents.find(a => a.id === sess.agentId)?.connected === false" class="ml-1 px-1 py-0.5 text-[10px] bg-red-50 text-red-500 rounded">已解绑</span>
                 </span>
-                <span class="text-xs text-muted flex-shrink-0">{{ getLastTime(sess) }}</span>
+                <span v-if="sess.unreadCount" class="px-1.5 py-0.5 text-[10px] bg-red-500 text-white rounded-full leading-none flex-shrink-0">{{ sess.unreadCount > 99 ? '99+' : sess.unreadCount }}</span>
               </div>
-              <p class="text-xs text-secondary truncate mt-0.5">{{ getLastMessage(sess) }}</p>
+              <p class="text-xs text-muted truncate mt-0.5">{{ sess.adapterName }}</p>
             </div>
           </div>
         </div>
@@ -483,7 +470,7 @@ function getStatusColor(agent) {
             <span v-if="activeSession?.type === 'p2p' && agents.find(a => a.id === activeSession?.agentId)?.connected === false" class="ml-2 px-2 py-0.5 text-xs bg-red-50 text-red-500 rounded">已解绑</span>
           </div>
           <div class="text-xs text-muted">
-            {{ activeSession?.type === 'system' ? '系统工作流通知' : (activeSession?.type === 'group' ? `${activeSession?.agentIds?.length || 0} 位成员` : '私聊') }}
+            {{ activeSession?.type === 'system' ? '系统工作流通知' : (activeSession?.type === 'group' ? `${activeSession?.agentIds?.length || 0} 位成员` : (activeSession?.adapterName ? `私聊 · ${activeSession.adapterName}` : '私聊')) }}
           </div>
         </div>
         <!-- <button
