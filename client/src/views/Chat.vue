@@ -323,6 +323,11 @@ function scrollToBottom() {
   })
 }
 
+// 切换会话时滚动到底部
+watch(() => chatStore.currentSessionId, () => {
+  scrollToBottom()
+})
+
 // 监听消息变化，检测 ExCard 提议
 watch(() => activeSession.value?.messages, (newMessages, oldMessages) => {
   if (!newMessages || newMessages.length === 0) return
@@ -350,6 +355,11 @@ watch(() => activeSession.value?.messages, (newMessages, oldMessages) => {
     }
   }
 }, { deep: true })
+
+// 新消息时自动滚动到底部
+watch(() => activeSession.value?.messages?.length, () => {
+  scrollToBottom()
+})
 
 function getStatusColor(agent) {
   const colors = { online: 'bg-green-400', busy: 'bg-yellow-400', offline: 'bg-gray-300' }
