@@ -141,6 +141,9 @@ const api = {
   // --- Docs ---
   getDocs: () => request('GET', '/api/docs'),
   getDocContent: (filename) => request('GET', `/api/docs/${encodeURIComponent(filename)}`),
+
+  // --- Branding ---
+  getBranding: () => request('GET', '/api/branding'),
 };
 
 export default api;

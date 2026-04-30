@@ -238,6 +238,13 @@ setupWebhookRoutes(app, activeAdapters);
 setupLogsRoutes(app);
 setupDocsRoutes(app);
 
+// 品牌定制（环境变量）
+app.get('/api/branding', (_req, res) => {
+  res.json({
+    title: process.env.OPENEXTEAM_TITLE || 'OpenExTeam',
+  });
+});
+
 // 手动连接/断开 API
 app.post('/api/adapter/:name/connect', async (req, res) => {
   try {

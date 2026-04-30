@@ -15,6 +15,7 @@ import api from './api/client'
 const boardStore = useBoardStore()
 const chatStore = useChatStore()
 const activeTab = ref('chat')
+const brandingTitle = ref('OpenExTeam')
 
 // 连接状态
 const connectedAdapters = ref([])
@@ -41,6 +42,14 @@ const tabs = [
 ]
 
 onMounted(async () => {
+  // 加载品牌定制
+  try {
+    const b = await api.getBranding()
+    if (b.title) {
+      brandingTitle.value = b.title
+      document.title = b.title
+    }
+  } catch {}
   await boardStore.fetchAll()
   // 同步 agents 到 ChatStore
   chatStore.initSessions(boardStore.agents)
@@ -103,7 +112,7 @@ function onNavigate(tab) {
       <!-- Header -->
       <header class="bg-surface border-b border-border px-6 py-3 flex items-center justify-between shadow-xs">
         <div class="flex items-center gap-6">
-          <h1 class="text-lg font-semibold text-primary">OpenExTeam</h1>
+          <h1 class="text-lg font-semibold text-primary">{{ brandingTitle }}</h1>
           <nav class="flex gap-1">
             <button
               v-for="tab in tabs"
@@ -133,7 +142,7 @@ function onNavigate(tab) {
             </span>
           </div>
           <div class="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-white text-sm font-bold shadow-xs">
-            O
+            {{ brandingTitle.charAt(0) }}
           </div>
         </div>
       </header>
