@@ -35,6 +35,22 @@ echo "  OpenExTeam 启动中..."
 echo "============================================"
 echo ""
 
+# 检查是否已在运行
+if curl -s http://localhost:4000/health > /dev/null 2>&1; then
+  echo "OpenExTeam 已在运行，打开浏览器..."
+  open http://localhost:4000
+  read -p "按 Enter 键关闭此窗口..."
+  exit 0
+fi
+
+# 清理残留 PID（进程已退出但 pid 文件还在）
+if [ -f ~/.openexteam/server.pid ]; then
+  OLD_PID=$(cat ~/.openexteam/server.pid)
+  if ! kill -0 "$OLD_PID" 2>/dev/null; then
+    rm -f ~/.openexteam/server.pid
+  fi
+fi
+
 # 后台启动服务器（nohup 脱离终端，关闭窗口不影响运行）
 nohup node server/index.js > ~/.openexteam/server.log 2>&1 &
 SERVER_PID=$!

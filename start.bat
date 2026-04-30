@@ -36,6 +36,15 @@ echo   OpenExTeam 启动中...
 echo ============================================
 echo.
 
+:: 检查是否已在运行
+curl -s http://localhost:4000/health >nul 2>&1
+if %errorlevel% equ 0 (
+  echo OpenExTeam 已在运行，打开浏览器...
+  start http://localhost:4000
+  pause
+  exit /b 0
+)
+
 :: 启动服务器（后台运行，关闭窗口不影响）
 start /b node server/index.js > "%USERPROFILE%\.openexteam\server.log" 2>&1
 
