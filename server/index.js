@@ -256,9 +256,12 @@ function loadCustomize() {
 }
 
 loadCustomize();
-fs.watch(CUSTOMIZE_FILE, () => {
-  loadCustomize();
-  console.log('[Customize] Reloaded:', JSON.stringify(customize));
+// 监听目录而非文件，避免编辑器"写临时文件→重命名"导致 inode 变化丢失监听
+fs.watch(DATA_DIR, (eventType, filename) => {
+  if (filename === 'openexteam.json') {
+    loadCustomize();
+    console.log('[Customize] Reloaded:', JSON.stringify(customize));
+  }
 });
 
 app.get('/api/branding', (_req, res) => {
