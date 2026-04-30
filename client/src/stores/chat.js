@@ -333,7 +333,50 @@ export const useChatStore = defineStore('chat', () => {
     const sess = sessions.value.find(s => s.id === sessionId);
     if (!sess) return;
 
-    if (sess.type === 'p2p') {
+    if (sess.type === 'system') {
+      try {
+        console.log('[Chat] Loading system notification history');
+        const data = await api.getSystemHistory(50);
+        if (data.messages && data.messages.length > 0) {
+          const historyMessages = data.messages.map(msg => {
+            let content = msg.content ? (typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)) : '';
+            if (content.startsWith('"') && content.endsWith('"')) {
+              try { content = JSON.parse(content); } catch {}
+            }
+            let ts = msg.timestamp;
+            if (ts && !ts.includes('T')) {
+              ts = ts.replace(' ', 'T') + 'Z';
+            }
+            // 格式化系统消息
+            let displayContent;
+            try {
+              const parsed = typeof content === 'string' ? JSON.parse(content) : content;
+              if (typeof parsed === 'object' && parsed !== null) {
+                const parts = [];
+                if (parsed.title) parts.push(parsed.title);
+                if (parsed.message) parts.push(parsed.message);
+                displayContent = parts.length > 0 ? parts.join(' — ') : `[${msg.type || 'system'}]`;
+              } else {
+                displayContent = content;
+              }
+            } catch {
+              displayContent = content;
+            }
+            return {
+              sender: 'system',
+              text: displayContent,
+              time: new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+              isHistory: true
+            };
+          });
+          sess.messages = historyMessages;
+          loadedHistories.value.add(sessionId);
+          console.log('[Chat] Loaded', historyMessages.length, 'system history messages');
+        }
+      } catch (err) {
+        console.error('[Chat] Failed to load system history:', err);
+      }
+    } else if (sess.type === 'p2p') {
       try {
         console.log('[Chat] Loading history for agent:', sess.agentId);
         const data = await api.getMessageHistory(sess.agentId);

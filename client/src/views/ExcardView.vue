@@ -2,11 +2,19 @@
 import { ref, computed, onMounted } from 'vue'
 import { useExcardStore } from '../stores/excards'
 import { useSettingsStore } from '../stores/settings'
+import { useToast } from '../composables/useToast'
 import ExcardMdEditor from '../components/ExcardMdEditor.vue'
 import api from '../api/client'
 
 const store = useExcardStore()
 const settingsStore = useSettingsStore()
+const { toast } = useToast()
+const saving = ref(false)
+const validationErrors = ref({})
+
+function clearValidationError(field) {
+  delete validationErrors.value[field]
+}
 const showCreateModal = ref(false)
 const isEditing = ref(false)
 const editData = ref({})
@@ -147,18 +155,26 @@ function removeTag(tag) {
 }
 
 async function createExcard() {
+  validationErrors.value = {}
   if (!newExcard.value.name.trim()) {
-    alert('请填写 ExCard 名称')
+    validationErrors.value.name = true
+    toast.error('请填写 ExCard 名称')
     return
   }
   if (!newExcard.value.agent) {
-    alert('请为 ExCard 绑定一个 Agent')
+    validationErrors.value.agent = true
+    toast.error('请为 ExCard 绑定一个 Agent')
     return
   }
-  const num = String(store.excards.length + 1).padStart(3, '0')
-  const id = `EC-${num}`
-  await store.createExcard({ id, ...JSON.parse(JSON.stringify(newExcard.value)) })
-  showCreateModal.value = false
+  try {
+    const num = String(store.excards.length + 1).padStart(3, '0')
+    const id = `EC-${num}`
+    await store.createExcard({ id, ...JSON.parse(JSON.stringify(newExcard.value)) })
+    showCreateModal.value = false
+    toast.success('ExCard 创建成功')
+  } catch (err) {
+    toast.error('创建失败：' + err.message)
+  }
 }
 
 async function startEditExcard() {
@@ -429,15 +445,23 @@ function parseExcardMd(mdContent) {
 
 async function saveEditExcard() {
   if (!useMdEditor.value && !editData.value.agent) {
-    alert('请为 ExCard 绑定一个 Agent')
+    toast.error('请为 ExCard 绑定一个 Agent')
     return
   }
-  if (useMdEditor.value) {
-    await store.updateExcardMd(store.selectedExcard.id, store.selectedExcardMd)
-  } else {
-    await store.updateExcard(store.selectedExcard.id, editData.value)
+  saving.value = true
+  try {
+    if (useMdEditor.value) {
+      await store.updateExcardMd(store.selectedExcard.id, store.selectedExcardMd)
+    } else {
+      await store.updateExcard(store.selectedExcard.id, editData.value)
+    }
+    isEditing.value = false
+    toast.success('ExCard 保存成功')
+  } catch (err) {
+    toast.error('保存失败：' + err.message)
+  } finally {
+    saving.value = false
   }
-  isEditing.value = false
 }
 
 function cancelEditExcard() {
@@ -473,7 +497,16 @@ function getCategoryLabel(category) {
 
     <div class="flex-1 flex gap-4 overflow-hidden">
       <div class="flex-1 overflow-y-auto pr-1">
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <!-- 加载状态 -->
+        <div v-if="store.loading" class="flex items-center justify-center h-48 text-muted">
+          <span class="animate-pulse">加载中...</span>
+        </div>
+        <!-- 空状态 -->
+        <div v-else-if="store.excards.length === 0" class="flex flex-col items-center justify-center h-48 text-muted">
+          <p class="text-sm">暂无 ExCard 模板</p>
+          <p class="text-xs mt-1">点击「新建 ExCard」创建第一个执行模板</p>
+        </div>
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           <div
             v-for="ec in store.excards"
             :key="ec.id"
@@ -536,7 +569,7 @@ function getCategoryLabel(category) {
           </div>
           <div class="flex items-center gap-2">
             <button @click="cancelEditExcard" class="px-3 py-1.5 text-xs text-secondary hover:text-primary">取消</button>
-            <button @click="saveEditExcard" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">保存</button>
+            <button @click="saveEditExcard" :disabled="saving" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50">{{ saving ? '保存中...' : '保存' }}</button>
             <button @click="deleteExcard" class="px-3 py-1.5 text-xs border border-red-200 text-red-500 rounded-lg hover:bg-red-50">删除</button>
           </div>
         </div>

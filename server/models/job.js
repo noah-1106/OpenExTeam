@@ -70,9 +70,9 @@ function updateJob(id, data) {
     : job.schedule_times;
 
   queryRun(
-    'UPDATE jobs SET title=?,description=?,status=?,excard_id=?,agent=?,schedule_type=?,schedule_days=?,schedule_times=? WHERE id=?',
+    'UPDATE jobs SET title=?,description=?,type=?,status=?,excard_id=?,agent=?,schedule_type=?,schedule_days=?,schedule_times=? WHERE id=?',
     [data.title ?? job.title, data.description ?? job.description,
-     data.status ?? job.status, excardId, agent,
+     data.type ?? job.type, data.status ?? job.status, excardId, agent,
      scheduleType, scheduleDays, scheduleTimes, id]
   );
 

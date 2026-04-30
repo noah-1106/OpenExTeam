@@ -1,5 +1,8 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
+import { useToast } from '../composables/useToast'
+
+const { toast } = useToast()
 
 const props = defineProps({
   show: { type: Boolean, required: true },
@@ -12,6 +15,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'create'])
 
 const isOpen = computed(() => props.show)
+const validationErrors = ref({})
 
 // 表单数据
 const form = ref({
@@ -161,12 +165,15 @@ function handleClose() {
 }
 
 function handleCreate() {
+  validationErrors.value = {}
   if (!form.value.name.trim()) {
-    alert('请填写 ExCard 名称')
+    validationErrors.value.name = true
+    toast.error('请填写 ExCard 名称')
     return
   }
   if (!form.value.markdown.trim()) {
-    alert('请填写 ExCard 内容')
+    validationErrors.value.markdown = true
+    toast.error('请填写 ExCard 内容')
     return
   }
 
@@ -176,6 +183,10 @@ function handleCreate() {
     id,
   })
   handleClose()
+}
+
+function clearValidationError(field) {
+  delete validationErrors.value[field]
 }
 </script>
 
@@ -197,14 +208,14 @@ function handleCreate() {
         <div class="flex-1 overflow-y-auto p-6 space-y-4">
           <div v-if="!props.isModifyMode">
             <label class="block text-sm font-medium text-primary mb-1.5">ExCard 名称 *</label>
-            <input v-model="form.name" type="text" placeholder="输入名称"
-              class="w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+            <input v-model="form.name" @input="clearValidationError('name')" type="text" placeholder="输入名称"
+              :class="['w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm outline-none focus:ring-2 focus:ring-accent focus:border-transparent', validationErrors.name ? 'border-red-400' : 'border-border']"
             />
           </div>
           <div v-else>
             <label class="block text-sm font-medium text-primary mb-1.5">ExCard 名称 *</label>
-            <input v-model="form.name" type="text" placeholder="输入名称"
-              class="w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+            <input v-model="form.name" @input="clearValidationError('name')" type="text" placeholder="输入名称"
+              :class="['w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm outline-none focus:ring-2 focus:ring-accent focus:border-transparent', validationErrors.name ? 'border-red-400' : 'border-border']"
             />
             <p class="text-xs text-muted mt-1">正在修改: {{ props.targetExcardId }}</p>
           </div>
@@ -225,8 +236,8 @@ function handleCreate() {
 
           <div>
             <label class="block text-sm font-medium text-primary mb-1.5">Markdown 内容 *</label>
-            <textarea v-model="form.markdown" rows="10" placeholder="# ExCard 标题&#10;&#10;## 任务描述&#10;..."
-              class="w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-mono"
+            <textarea v-model="form.markdown" @input="clearValidationError('markdown')" rows="10" placeholder="# ExCard 标题&#10;&#10;## 任务描述&#10;..."
+              :class="['w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-mono', validationErrors.markdown ? 'border-red-400' : 'border-border']"
             ></textarea>
           </div>
         </div>

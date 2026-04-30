@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import Board from './views/Board.vue'
 import JobView from './views/JobView.vue'
 import Settings from './views/Settings.vue'
@@ -7,6 +7,7 @@ import DocsView from './views/DocsView.vue'
 import Monitor from './views/Monitor.vue'
 import Chat from './views/Chat.vue'
 import ExcardView from './views/ExcardView.vue'
+import Toast from './components/Toast.vue'
 import { useBoardStore } from './stores/board'
 import { useChatStore } from './stores/chat'
 import api from './api/client'
@@ -14,6 +15,20 @@ import api from './api/client'
 const boardStore = useBoardStore()
 const chatStore = useChatStore()
 const activeTab = ref('chat')
+
+// 连接状态
+const connectedAdapters = ref([])
+const allDisconnected = computed(() => connectedAdapters.value.length === 0)
+let healthTimer = null
+
+async function checkHealth() {
+  try {
+    const h = await api.health()
+    connectedAdapters.value = h.adapters || []
+  } catch {
+    connectedAdapters.value = []
+  }
+}
 
 const tabs = [
   { id: 'chat',    label: '聊天' },
@@ -29,6 +44,13 @@ onMounted(async () => {
   await boardStore.fetchAll()
   // 同步 agents 到 ChatStore
   chatStore.initSessions(boardStore.agents)
+  // 启动连接状态检查
+  await checkHealth()
+  healthTimer = setInterval(checkHealth, 10000)
+})
+
+onUnmounted(() => {
+  if (healthTimer) clearInterval(healthTimer)
 })
 
 // 当 agents 列表更新时，同步到 ChatStore
@@ -77,7 +99,7 @@ function onNavigate(tab) {
 
 <template>
   <div class="flex h-screen overflow-hidden">
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <Toast />    <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Header -->
       <header class="bg-surface border-b border-border px-6 py-3 flex items-center justify-between shadow-xs">
         <div class="flex items-center gap-6">
@@ -99,7 +121,17 @@ function onNavigate(tab) {
           </nav>
         </div>
         <div class="flex items-center gap-3">
-          <span class="text-sm text-secondary">Phase 1</span>
+          <!-- 连接状态 -->
+          <div v-if="allDisconnected" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-600 text-xs">
+            <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+            未连接
+          </div>
+          <div v-else class="flex items-center gap-1.5">
+            <span v-for="name in connectedAdapters" :key="name" class="flex items-center gap-1 px-2 py-1 rounded-full bg-green-50 text-green-700 text-xs">
+              <span class="w-2 h-2 rounded-full bg-green-500"></span>
+              {{ name }}
+            </span>
+          </div>
           <div class="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-white text-sm font-bold shadow-xs">
             O
           </div>

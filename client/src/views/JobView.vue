@@ -1,6 +1,9 @@
 <script setup>
 import { ref, computed } from 'vue'
 import api, { BASE as API_BASE } from '../api/client'
+import { useToast } from '../composables/useToast'
+
+const { toast } = useToast()
 
 const props = defineProps({
   jobs: { type: Array, required: true },
@@ -264,7 +267,7 @@ async function startWorkflow(job) {
         emit('start-job', job.id)
       } catch (e) {
         console.error('Failed to restart job:', e)
-        alert('重新执行失败，请刷新重试')
+        toast.error('重新执行失败，请刷新重试')
       }
     } else {
       // 创建为新工作
@@ -297,10 +300,10 @@ async function startWorkflow(job) {
         // 刷新列表
         emit('create-job', { ...job, id: newJobRes.id, title: job.title + ' (副本)' })
 
-        alert('已创建为新工作！')
+        toast.success('已创建为新工作')
       } catch (e) {
         console.error('Failed to copy job:', e)
-        alert('创建新工作失败，请重试')
+        toast.error('创建新工作失败，请重试')
       }
     }
   } else {

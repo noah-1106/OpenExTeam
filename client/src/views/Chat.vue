@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, nextTick, watch } from 'vue'
 import { useChatStore } from '../stores/chat'
+import { useToast } from '../composables/useToast'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useBoardStore } from '../stores/board'
@@ -14,6 +15,7 @@ const props = defineProps({
 
 const chatStore = useChatStore()
 const boardStore = useBoardStore()
+const { toast } = useToast()
 const typing = ref(false)
 const inputText = ref('')
 const chatContainer = ref(null)
@@ -85,7 +87,7 @@ async function handleCreateExcard(data) {
       isModifyMode.value = false
       targetExcardId.value = ''
       await boardStore.fetchAll()
-      alert('ExCard 更新成功！')
+      toast.success('ExCard 更新成功')
     } else {
       // 创建模式 - 新建卡片
       await api.createExcard({
@@ -102,11 +104,11 @@ async function handleCreateExcard(data) {
       // 刷新 ExCard 列表
       await boardStore.fetchAll()
 
-      alert('ExCard 创建成功！')
+      toast.success('ExCard 创建成功')
     }
   } catch (err) {
     console.error('处理 ExCard 失败:', err)
-    alert('处理 ExCard 失败：' + err.message)
+    toast.error('处理 ExCard 失败：' + err.message)
   }
 }
 
@@ -175,7 +177,7 @@ async function sendMessage() {
       const userDemand = parts.slice(2).join(' ').trim()
 
       if (!cardId) {
-        alert('请指定要修改的 ExCard ID，例如：/ec-modify ec-abc123 增加新步骤')
+        toast.info('请指定要修改的 ExCard ID，例如：/ec-modify ec-abc123 增加新步骤')
         return
       }
 
@@ -407,6 +409,10 @@ function getStatusColor(agent) {
         <!-- 单聊 -->
         <div class="px-3 mb-1">
           <div class="text-xs font-semibold text-muted uppercase tracking-wide px-2 py-1">单聊</div>
+          <div v-if="chatStore.sortedP2pSessions.length === 0" class="px-2 py-6 text-center">
+            <p class="text-sm text-muted">暂无 Agent 在线</p>
+            <p class="text-xs text-muted mt-1">请在设置中配置并连接 Adapter</p>
+          </div>
           <div
             v-for="sess in chatStore.sortedP2pSessions"
             :key="sess.id"

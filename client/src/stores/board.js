@@ -111,10 +111,15 @@ export const useBoardStore = defineStore('board', () => {
         console.log('[BoardStore] Adapter connected, re-fetching agents');
         fetchAll();
       },
+      adapter_disconnected: () => {
+        console.log('[BoardStore] Adapter disconnected, re-fetching agents');
+        fetchAll();
+      },
     }, {
       onOpen: () => {
         console.log('[BoardStore] SSE connected');
         clearError();
+        fetchAll();
       },
       onError: () => {
         setError('实时连接断开，正在重连...');

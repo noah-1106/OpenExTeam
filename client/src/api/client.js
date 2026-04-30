@@ -13,6 +13,30 @@ function getApiKey() {
   try { return localStorage.getItem('openexteam_api_key') || ''; } catch { return ''; }
 }
 
+const ERROR_MESSAGES = {
+  'Failed to fetch': '网络连接失败，请检查服务器是否运行',
+  'ECONNREFUSED': '服务器未响应，请检查后端服务是否启动',
+  401: '认证失败，请检查 API Key',
+  403: '权限不足',
+  404: '请求的资源不存在',
+  500: '服务器内部错误，请稍后重试',
+  502: '服务器网关错误，请稍后重试',
+  503: '服务暂不可用，请稍后重试',
+}
+
+function friendlyError(err) {
+  const msg = err.message || ''
+  // HTTP 状态码匹配
+  for (const [code, text] of Object.entries(ERROR_MESSAGES)) {
+    if (msg.includes(code) || msg.includes(`HTTP ${code}`)) return text
+  }
+  // 网络错误关键词匹配
+  for (const [keyword, text] of Object.entries(ERROR_MESSAGES)) {
+    if (typeof keyword === 'string' && msg.includes(keyword)) return text
+  }
+  return msg
+}
+
 async function request(method, path, body) {
   const opts = {
     method,
@@ -39,7 +63,9 @@ async function request(method, path, body) {
     if (!res.ok) {
       const errorMsg = data?.error || data?.message || `HTTP ${res.status}`;
       console.error(`[API] ${method} ${path} failed:`, errorMsg);
-      throw new Error(errorMsg);
+      const err = new Error(errorMsg);
+      err.status = res.status;
+      throw err;
     }
 
     return data;
@@ -50,7 +76,7 @@ async function request(method, path, body) {
       throw new Error('网络连接失败，请检查服务器是否运行');
     }
     console.error(`[API] ${method} ${path} error:`, err);
-    throw err;
+    throw new Error(friendlyError(err));
   }
 }
 
@@ -106,9 +132,15 @@ const api = {
     request('POST', '/api/message/send', { agentId, content, type, agentName }),
   getMessageHistory: (agentId, limit = 50) =>
     request('GET', `/api/messages/history?agentId=${encodeURIComponent(agentId)}&limit=${limit}`),
+  getSystemHistory: (limit = 50) =>
+    request('GET', `/api/messages/history?type=system&limit=${limit}`),
 
   // --- Logs ---
   getLogs: (limit = 50) => request('GET', `/api/logs?limit=${limit}`),
+
+  // --- Docs ---
+  getDocs: () => request('GET', '/api/docs'),
+  getDocContent: (filename) => request('GET', `/api/docs/${encodeURIComponent(filename)}`),
 };
 
 export default api;

@@ -223,6 +223,7 @@ const { setupExcardsRoutes } = require('./routes/excards');
 const { setupWorkflowRoutes } = require('./routes/workflow');
 const { setupWebhookRoutes } = require('./routes/webhook');
 const { setupLogsRoutes } = require('./routes/logs');
+const { setupDocsRoutes } = require('./routes/docs');
 
 // API 路由必须在静态文件和通配符路由之前！
 setupConfigRoutes(app, activeAdapters, adapterConfigs, { connectAdapterManual, disconnectAdapterManual });
@@ -235,6 +236,7 @@ setupExcardsRoutes(app);
 setupWorkflowRoutes(app);
 setupWebhookRoutes(app, activeAdapters);
 setupLogsRoutes(app);
+setupDocsRoutes(app);
 
 // 手动连接/断开 API
 app.post('/api/adapter/:name/connect', async (req, res) => {

@@ -8,6 +8,7 @@ const fs = require('fs');
 const DATA_DIR = path.join(process.env.HOME || '/root', '.openexteam');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const DB_FILE = path.join(__dirname, 'db', 'openexteam.db');
+const DOCS_DIR = path.join(DATA_DIR, 'docs');
 
 // 确保数据目录存在
 if (!fs.existsSync(DATA_DIR)) {
@@ -15,6 +16,9 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 if (!fs.existsSync(path.dirname(DB_FILE))) {
   fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
+}
+if (!fs.existsSync(DOCS_DIR)) {
+  fs.mkdirSync(DOCS_DIR, { recursive: true });
 }
 
 function loadConfig() {
@@ -35,6 +39,7 @@ module.exports = {
   DATA_DIR,
   CONFIG_FILE,
   DB_FILE,
+  DOCS_DIR,
   loadConfig,
   saveConfig
 };

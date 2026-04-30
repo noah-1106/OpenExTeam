@@ -1,10 +1,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useSettingsStore } from '../stores/settings';
+import { useToast } from '../composables/useToast';
 import api from '../api/client';
 import { createSSEConnection } from '../api/sse.js';
 
 const settingsStore = useSettingsStore();
+const { toast } = useToast();
 
 const frameworks = [
   { id: 'openclaw', name: 'OpenClaw', icon: '🦞', color: 'blue' },
@@ -137,7 +139,7 @@ async function saveConnection() {
     selectedFramework.value = '';
     // 不需要 alert，配对信息会通过 SSE 显示在对应连接下面
   } catch (err) {
-    alert('保存失败：' + err.message);
+    toast.error('保存失败：' + err.message);
   } finally {
     saving.value = false;
   }
@@ -158,7 +160,7 @@ async function deleteConnection(conn) {
     }
     await settingsStore.deleteAdapter(conn);
   } catch (err) {
-    alert('删除失败：' + err.message);
+    toast.error('删除失败：' + err.message);
   }
 }
 
@@ -168,7 +170,7 @@ async function handleConnect(conn) {
     await settingsStore.connectAdapter(conn.name);
     fetchConnectedAdapters();
   } catch (err) {
-    alert('连接失败：' + err.message);
+    toast.error('连接失败：' + err.message);
   } finally {
     connecting.value[conn.name] = false;
   }
@@ -180,7 +182,7 @@ async function handleDisconnect(conn) {
     await settingsStore.disconnectAdapter(conn.name);
     fetchConnectedAdapters();
   } catch (err) {
-    alert('断开失败：' + err.message);
+    toast.error('断开失败：' + err.message);
   } finally {
     disconnecting.value[conn.name] = false;
   }

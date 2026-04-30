@@ -10,10 +10,16 @@ const { validators, validateMessageSend } = require('../validation');
 function setupMessagesRoutes(app, activeAdapters) {
   // 获取聊天历史
   app.get('/api/messages/history', (req, res) => {
-    const { agentId, limit = 50 } = req.query;
+    const { agentId, type, limit = 50 } = req.query;
     let sql, params;
 
-    if (agentId) {
+    if (type === 'system') {
+      // 获取系统通知消息（工作流通知、消息状态等）
+      sql = `SELECT * FROM message_log
+             WHERE from_agent = 'system' OR type LIKE 'workflow_%' OR type LIKE 'message_%'
+             ORDER BY timestamp DESC LIMIT ?`;
+      params = [parseInt(limit)];
+    } else if (agentId) {
       // 获取与特定 agent 的聊天历史
       sql = `SELECT * FROM message_log
              WHERE (from_agent = ? OR to_agent = ?)
