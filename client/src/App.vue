@@ -26,6 +26,12 @@ async function checkHealth() {
   try {
     const h = await api.health()
     connectedAdapters.value = h.adapters || []
+    // 顺带刷新品牌定制
+    const b = await api.getBranding()
+    if (b.title && b.title !== brandingTitle.value) {
+      brandingTitle.value = b.title
+      document.title = b.title
+    }
   } catch {
     connectedAdapters.value = []
   }

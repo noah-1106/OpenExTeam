@@ -9,7 +9,8 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { initDb, queryRun } = require('./models/db');
 const { setupSSE, broadcast } = require('./events/sse');
-const { loadConfig, saveConfig } = require('./config');
+const { loadConfig, saveConfig, DATA_DIR } = require('./config');
+const fs = require('fs');
 const { handleAgentReply, setActiveWorkflowsRef, setActiveAdaptersRef, startWorkflow } = require('./services/workflow');
 
 const app = express();
@@ -238,11 +239,30 @@ setupWebhookRoutes(app, activeAdapters);
 setupLogsRoutes(app);
 setupDocsRoutes(app);
 
-// 品牌定制（环境变量）
+// 品牌定制（从文件读取，支持热重载）
+const CUSTOMIZE_FILE = path.join(DATA_DIR, 'openexteam.json');
+const DEFAULT_CUSTOMIZE = { title: 'OpenExTeam' };
+let customize = { ...DEFAULT_CUSTOMIZE };
+
+function loadCustomize() {
+  try {
+    if (!fs.existsSync(CUSTOMIZE_FILE)) {
+      fs.writeFileSync(CUSTOMIZE_FILE, JSON.stringify(DEFAULT_CUSTOMIZE, null, 2), 'utf8');
+    }
+    customize = JSON.parse(fs.readFileSync(CUSTOMIZE_FILE, 'utf8'));
+  } catch {
+    customize = { ...DEFAULT_CUSTOMIZE };
+  }
+}
+
+loadCustomize();
+fs.watch(CUSTOMIZE_FILE, () => {
+  loadCustomize();
+  console.log('[Customize] Reloaded:', JSON.stringify(customize));
+});
+
 app.get('/api/branding', (_req, res) => {
-  res.json({
-    title: process.env.OPENEXTEAM_TITLE || 'OpenExTeam',
-  });
+  res.json(customize);
 });
 
 // 手动连接/断开 API
