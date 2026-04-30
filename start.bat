@@ -36,17 +36,18 @@ echo   OpenExTeam 启动中...
 echo ============================================
 echo.
 
-:: 启动服务器
-start /b node server/index.js
+:: 启动服务器（后台运行，关闭窗口不影响）
+start /b node server/index.js > "%USERPROFILE%\.openexteam\server.log" 2>&1
 
 :: 等待服务器就绪后打开浏览器
 timeout /t 3 /nobreak >nul
 start http://localhost:4000
 
 echo.
-echo 关闭此窗口将停止服务器
-echo 按 Ctrl+C 停止服务器
+echo 服务器已在后台运行
+echo 关闭此窗口不影响服务器运行
+echo 日志文件: %USERPROFILE%\.openexteam\server.log
 echo.
-
-:: 保持窗口
-cmd /k
+echo 如需停止服务器，在任务管理器中结束 node.exe 进程
+echo.
+pause

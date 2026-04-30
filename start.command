@@ -35,9 +35,10 @@ echo "  OpenExTeam 启动中..."
 echo "============================================"
 echo ""
 
-# 后台启动服务器，记录 PID
-node server/index.js &
+# 后台启动服务器（nohup 脱离终端，关闭窗口不影响运行）
+nohup node server/index.js > ~/.openexteam/server.log 2>&1 &
 SERVER_PID=$!
+echo $SERVER_PID > ~/.openexteam/server.pid
 
 # 等待服务器就绪
 for i in $(seq 1 15); do
@@ -50,8 +51,11 @@ for i in $(seq 1 15); do
 done
 
 echo ""
-echo "按 Ctrl+C 停止服务器"
+echo "服务器已在后台运行（PID: $SERVER_PID）"
+echo "关闭此窗口不影响服务器运行"
+echo "日志文件: ~/.openexteam/server.log"
 echo ""
-
-# 等待服务器进程
-wait $SERVER_PID
+echo "如需停止服务器，运行："
+echo "  kill $SERVER_PID"
+echo ""
+read -p "按 Enter 键关闭此窗口..."
