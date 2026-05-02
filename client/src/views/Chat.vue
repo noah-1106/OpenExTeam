@@ -7,6 +7,7 @@ import DOMPurify from 'dompurify'
 import { useBoardStore } from '../stores/board'
 import api from '../api/client'
 import ExcardProposalModal from '../components/ExcardProposalModal.vue'
+import PickerModal from '../components/PickerModal.vue'
 import SlashCommandHelper from '../components/SlashCommandHelper.vue'
 
 const props = defineProps({
@@ -27,6 +28,16 @@ const proposalText = ref('')
 const isModifyMode = ref(false) // 是否是修改模式
 const targetExcardId = ref('') // 要修改的 ExCard ID
 const processedMessages = ref(new Set()) // 跟踪已处理过的消息
+
+// /jobrun 和 /ecrun 选择器
+const showJobPicker = ref(false)
+const showExcardPicker = ref(false)
+const jobPickerItems = computed(() =>
+  boardStore.jobs.map(j => ({ id: j.id, name: j.title, description: j.description }))
+)
+const excardPickerItems = computed(() =>
+  boardStore.excards.map(e => ({ id: e.id, name: e.name, description: e.description }))
+)
 
 // 检测消息中是否有 ExCard 提议
 function checkForExcardProposal(msg) {
@@ -170,7 +181,20 @@ async function sendMessage() {
 
   try {
     // 检测斜杠命令，给 agent 明确的回复格式要求
-    if (text.startsWith('/ec-modify')) {
+    // 注意：更长的命令必须放在更短的命令之前，避免 startsWith 误匹配
+    if (text === '/jobrun') {
+      if (jobPickerItems.value.length === 0) {
+        toast.info('暂无可运行的工作')
+        return
+      }
+      showJobPicker.value = true
+    } else if (text === '/ecrun') {
+      if (excardPickerItems.value.length === 0) {
+        toast.info('暂无可执行的 ExCard')
+        return
+      }
+      showExcardPicker.value = true
+    } else if (text.startsWith('/ec-modify')) {
       // /ec-modify <card-id> <需求>
       const parts = text.split(' ')
       const cardId = parts[1] || ''
@@ -323,6 +347,33 @@ function scrollToBottom() {
       chatContainer.value.scrollTop = chatContainer.value.scrollHeight
     }
   })
+}
+
+// /jobrun 选择工作后启动工作流
+async function onJobRunSelect(item) {
+  showJobPicker.value = false
+  try {
+    await boardStore.startWorkflow(item.id)
+    toast.success(`工作「${item.name}」已启动`)
+  } catch (err) {
+    toast.error(`启动失败：${err.message}`)
+  }
+}
+
+// /ecrun 选择 ExCard 后发送给当前 Agent
+async function onExcardRunSelect(item) {
+  showExcardPicker.value = false
+  try {
+    const data = await api.getExcardMd(item.id)
+    const markdown = data.markdown || ''
+    const actualMessage = `请按照以下 ExCard 执行：\n\n${markdown}`
+    await chatStore.sendMessage(`/ecrun ${item.name}`, {
+      userVisibleText: `/ecrun ${item.name}`,
+      actualMessage
+    })
+  } catch (err) {
+    toast.error(`执行失败：${err.message}`)
+  }
 }
 
 // 切换会话时滚动到底部
@@ -628,6 +679,20 @@ function getStatusColor(agent) {
       :target-excard-id="targetExcardId"
       @close="onProposalModalClose"
       @create="handleCreateExcard"
+    />
+    <PickerModal
+      :show="showJobPicker"
+      title="选择要运行的工作"
+      :items="jobPickerItems"
+      @select="onJobRunSelect"
+      @close="showJobPicker = false"
+    />
+    <PickerModal
+      :show="showExcardPicker"
+      title="选择要执行的 ExCard"
+      :items="excardPickerItems"
+      @select="onExcardRunSelect"
+      @close="showExcardPicker = false"
     />
   </div>
 </template>

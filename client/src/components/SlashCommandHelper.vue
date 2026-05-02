@@ -17,9 +17,14 @@ const commands = [
     description: '创建一个新的 ExCard',
   },
   {
-    key: 'job',
-    title: '创建工作',
-    description: '创建一个新的工作',
+    key: 'ecrun',
+    title: '执行 ExCard',
+    description: '选择并发送 ExCard 给当前 Agent',
+  },
+  {
+    key: 'jobrun',
+    title: '运行工作',
+    description: '选择并启动一个工作流',
   },
 ]
 
