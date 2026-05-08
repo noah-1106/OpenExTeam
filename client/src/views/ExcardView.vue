@@ -46,7 +46,6 @@ const availableAgents = computed(() => {
       adapter: a.adapter
     }))
   } else {
-    // 如果没有获取到具体 Agent，降级到适配器列表
     return (settingsStore.adapters || []).map(a => ({
       id: a.id,
       name: a.name || a.id
@@ -70,7 +69,6 @@ const newStepDesc = ref('')
 const newResource = ref('')
 const newTag = ref('')
 
-// 编辑模式的临时变量
 const editNewStepName = ref('')
 const editNewStepDesc = ref('')
 const editNewResource = ref('')
@@ -178,16 +176,12 @@ async function createExcard() {
 }
 
 async function startEditExcard() {
-  // 从 Markdown 重新解析数据，确保内容一致
   try {
     const mdData = await api.getExcardMd(store.selectedExcard.id)
     if (mdData) {
-      // 先使用 store 中的数据
       editData.value = JSON.parse(JSON.stringify(store.selectedExcard))
-      // 然后尝试从 Markdown 解析最新数据
       if (mdData.markdown) {
         const parsed = parseExcardMd(mdData.markdown)
-        // 合并解析的数据
         editData.value.name = parsed.name || editData.value.name
         editData.value.description = parsed.description || editData.value.description
         editData.value.category = parsed.category || editData.value.category
@@ -204,20 +198,17 @@ async function startEditExcard() {
         }
       }
     } else {
-      // 如果获取 Markdown 失败，直接使用 store 中的数据
       editData.value = JSON.parse(JSON.stringify(store.selectedExcard))
     }
   } catch (err) {
     console.error('[ExcardView] 解析 Markdown 失败:', err)
     editData.value = JSON.parse(JSON.stringify(store.selectedExcard))
   }
-  // 确保字段存在
   if (!editData.value.conventions) editData.value.conventions = { input: '', output: '', errorHandling: '' }
   if (!editData.value.tags) editData.value.tags = []
   if (!editData.value.resources) editData.value.resources = []
   if (!editData.value.workflow) editData.value.workflow = []
   if (!editData.value.agent) editData.value.agent = ''
-  // 重置编辑临时变量
   editNewStepName.value = ''
   editNewStepDesc.value = ''
   editNewResource.value = ''
@@ -226,7 +217,6 @@ async function startEditExcard() {
   useMdEditor.value = false
 }
 
-// 简单的 ExCard Markdown 解析器（和后端保持一致）
 function parseExcardMd(mdContent) {
   const excard = {
     name: '',
@@ -253,7 +243,6 @@ function parseExcardMd(mdContent) {
     const line = lines[i].trim()
     const rawLine = lines[i]
 
-    // 解析 Frontmatter (--- 开头)
     if (line === '---') {
       inFrontmatter = !inFrontmatter
       continue
@@ -269,13 +258,11 @@ function parseExcardMd(mdContent) {
       continue
     }
 
-    // 解析 H1 标题作为名称
     if (line.startsWith('# ')) {
       if (!excard.name) excard.name = line.slice(2).trim()
       continue
     }
 
-    // 解析 H2 标题（支持中英文）
     if (line.startsWith('## ')) {
       const title = line.slice(3).trim().toLowerCase()
       if (title.includes('resource') || title.includes('资源')) {
@@ -292,17 +279,14 @@ function parseExcardMd(mdContent) {
       continue
     }
 
-    // description (H1 后面的文本，或者## 卡片目的/任务描述下面的内容)
     if ((!currentSection || currentSection === 'description') && line && !line.startsWith('#')) {
       if (excard.description) excard.description += '\n' + line
       else excard.description = line
       continue
     }
 
-    // 解析各 section 内容
     if (currentSection === 'resource dependencies') {
       if (line.startsWith('### ')) {
-        // Finalize previous resource
         if (currentResource && currentResource.name) {
           excard.resources.push(currentResource)
         }
@@ -311,7 +295,6 @@ function parseExcardMd(mdContent) {
           currentResource = { name: resName, type: '', source: '', path: '', purpose: '' }
         }
       } else if (currentResource && line.match(/^-\s+\*\*/)) {
-        // Key-value within resource sub-heading: - **Key**: value
         const kvMatch = line.match(/^-\s+\*\*(.*?)\*\*:\s*(.*)$/)
         if (kvMatch) {
           const key = kvMatch[1].trim().toLowerCase()
@@ -322,11 +305,9 @@ function parseExcardMd(mdContent) {
           else if (key === 'purpose') currentResource.purpose = value
         }
       } else if ((line.startsWith('- ') || line.startsWith('* ')) && !currentResource) {
-        // Simple list format (only when not inside a sub-heading resource)
         const resourceText = line.slice(2).trim()
         excard.resources.push(resourceText)
       } else if (line.trim() === '' && currentResource) {
-        // Blank line = end of current resource
         if (currentResource.name) {
           excard.resources.push(currentResource)
         }
@@ -335,7 +316,6 @@ function parseExcardMd(mdContent) {
     }
 
     if (currentSection === 'execution workflow') {
-      // ### Step N: name format
       if (line.match(/^###\s+step\s+\d+/i)) {
         if (currentStep) excard.workflow.push(currentStep)
         const stepMatch = line.match(/^###\s+[Ss]tep\s+(\d+)\s*[:：]?\s*(.*)$/)
@@ -351,9 +331,7 @@ function parseExcardMd(mdContent) {
             checkpoint: ''
           }
         }
-      }
-      // Numbered list format: 1. **name** description
-      else if (line.match(/^\d+\.\s/)) {
+      } else if (line.match(/^\d+\.\s/)) {
         if (currentStep) excard.workflow.push(currentStep)
         const stepMatch = line.match(/^(\d+)\.\s\*\*(.*?)\*\*(.*)$/)
         if (stepMatch) {
@@ -371,7 +349,6 @@ function parseExcardMd(mdContent) {
           }
         }
       } else if (currentStep && line) {
-        // Parse key-value pairs in Step sub-heading format
         const kvMatch = line.match(/^-\s+\*\*(.*?)\*\*:\s*(.*)$/)
         if (kvMatch) {
           const key = kvMatch[1].trim().toLowerCase()
@@ -382,9 +359,7 @@ function parseExcardMd(mdContent) {
           else if (key === 'output') currentStep.output = value
           else if (key === 'checkpoint') currentStep.checkpoint = value
           else if (key === 'description') currentStep.description = value
-        }
-        // Fallback: append to description for numbered list format
-        else if (!line.toLowerCase().startsWith('agent:')) {
+        } else if (!line.toLowerCase().startsWith('agent:')) {
           if (currentStep.description) currentStep.description += '\n' + rawLine.trim()
           else currentStep.description = rawLine.trim()
         }
@@ -429,7 +404,6 @@ function parseExcardMd(mdContent) {
         excard.conventions.errorHandling = content
       }
     } else if (currentSection === '输出要求') {
-      // 如果有单独的"输出要求"部分，把内容放到 output 约定中
       if (!line.startsWith('#')) {
         if (excard.conventions.output) excard.conventions.output += '\n' + line
         else excard.conventions.output = line
@@ -481,78 +455,87 @@ function getCategoryLabel(category) {
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
-    <div class="flex items-center justify-between mb-6">
+  <div class="h-full flex flex-col p-6">
+    <div class="flex items-center justify-between mb-5 flex-shrink-0">
       <div>
-        <h2 class="text-xl font-semibold text-primary">ExCard 模板库</h2>
-        <p class="text-sm text-secondary mt-0.5">标准化 Agent 执行卡片模板</p>
+        <h2 class="text-[15px] font-semibold text-[#2D2D35]">ExCard 模板库</h2>
+        <p class="text-[13px] text-[#9CA3AF] mt-0.5">标准化 Agent 执行卡片模板</p>
       </div>
       <button
         @click="openCreateModal"
-        class="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent-hover transition-all duration-150 flex items-center gap-2"
+        class="px-4 py-2 bg-[#5B6AD7] text-white rounded-md text-[13px] font-medium hover:bg-[#4A58C0] transition-all duration-150 flex items-center gap-1.5"
       >
-        <span class="text-lg">+</span> 新建 ExCard
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        新建 ExCard
       </button>
     </div>
 
     <div class="flex-1 flex gap-4 overflow-hidden">
       <div class="flex-1 overflow-y-auto pr-1">
-        <!-- 加载状态 -->
-        <div v-if="store.loading" class="flex items-center justify-center h-48 text-muted">
-          <span class="animate-pulse">加载中...</span>
+        <div v-if="store.loading" class="flex items-center justify-center h-48 text-[#9CA3AF]">
+          <span class="animate-pulse text-[13px]">加载中...</span>
         </div>
-        <!-- 空状态 -->
-        <div v-else-if="store.excards.length === 0" class="flex flex-col items-center justify-center h-48 text-muted">
-          <p class="text-sm">暂无 ExCard 模板</p>
-          <p class="text-xs mt-1">点击「新建 ExCard」创建第一个执行模板</p>
+        <div v-else-if="store.excards.length === 0" class="flex flex-col items-center justify-center h-48 text-[#9CA3AF]">
+          <svg class="w-10 h-10 text-[#C5C9D3] mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p class="text-[13px]">暂无 ExCard 模板</p>
+          <p class="text-[12px] mt-1">点击「新建 ExCard」创建第一个执行模板</p>
         </div>
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           <div
             v-for="ec in store.excards"
             :key="ec.id"
             @click="toggleSelect(ec)"
             :class="[
-              'bg-surface rounded-xl border cursor-pointer transition-all duration-200 hover:shadow-sm',
-              selectedExcard?.id === ec.id ? 'border-accent ring-2 ring-accent/20' : 'border-border'
+              'bg-white rounded-md border cursor-pointer transition-all duration-200 hover:border-[#C5C9D3]',
+              selectedExcard?.id === ec.id ? 'border-[#5B6AD7] shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)]' : 'border-[#E8E8EC]'
             ]"
           >
-            <div class="p-5">
-              <div class="flex items-start justify-between mb-3">
+            <div class="p-4">
+              <div class="flex items-start justify-between mb-2">
                 <div class="flex-1 min-w-0">
-                  <div class="text-xs text-muted font-mono mb-1">{{ ec.id }}</div>
-                  <h3 class="font-semibold text-primary">{{ ec.name }}</h3>
+                  <div class="text-[11px] text-[#9CA3AF] font-mono mb-1">{{ ec.id }}</div>
+                  <h3 class="text-[13px] font-semibold text-[#2D2D35]">{{ ec.name }}</h3>
                 </div>
               </div>
-              <p class="text-sm text-secondary mb-3 line-clamp-2">{{ ec.description || '暂无描述' }}</p>
+              <p class="text-[12px] text-[#6B6B78] mb-3 line-clamp-2">{{ ec.description || '暂无描述' }}</p>
               <div class="flex flex-wrap gap-1.5 mb-3">
-                <span class="text-xs px-2 py-0.5 rounded bg-surface-raised text-secondary">{{ getCategoryLabel(ec.category) }}</span>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-[#F6F7FA] text-[#6B6B78]">{{ getCategoryLabel(ec.category) }}</span>
                 <span
                   v-for="tag in (ec.tags || []).slice(0, 2)"
                   :key="tag"
-                  class="px-2 py-0.5 rounded text-xs bg-accent/10 text-accent"
+                  class="px-2 py-0.5 rounded text-[11px] bg-[#F0F1FE] text-[#5B6AD7]"
                 >
                   {{ tag }}
                 </span>
-                <span v-if="(ec.tags || []).length > 2" class="text-xs text-muted">+{{ ec.tags.length - 2 }}</span>
+                <span v-if="(ec.tags || []).length > 2" class="text-[11px] text-[#9CA3AF]">+{{ ec.tags.length - 2 }}</span>
               </div>
-              <div class="flex items-center gap-4 text-xs text-muted">
-                <span v-if="ec.agent">🤖 {{ ec.agent }}</span>
-                <span>📦 {{ (ec.resources || []).length }}</span>
-                <span>🔄 {{ (ec.workflow || []).length }}</span>
+              <div class="flex items-center gap-4 text-[11px] text-[#9CA3AF]">
+                <span v-if="ec.agent" class="flex items-center gap-1">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                  </svg>
+                  {{ ec.agent }}
+                </span>
+                <span>{{ (ec.resources || []).length }} 资源</span>
+                <span>{{ (ec.workflow || []).length }} 步骤</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div v-if="store.selectedExcard" class="w-[450px] flex flex-col bg-surface rounded-xl border border-border flex-shrink-0 overflow-hidden">
-        <div class="flex justify-between items-center p-4 border-b border-border">
+      <div v-if="store.selectedExcard" class="w-[420px] flex flex-col bg-white rounded-md border border-[#E8E8EC] flex-shrink-0 overflow-hidden">
+        <div class="flex justify-between items-center p-3 border-b border-[#ECECF0] flex-shrink-0">
           <div class="flex items-center gap-2">
             <button
               @click="useMdEditor = false"
               :class="[
-                'px-2 py-1 text-xs rounded transition-all',
-                !useMdEditor ? 'bg-accent text-white' : 'text-secondary hover:text-primary'
+                'px-2.5 py-1 text-[11px] rounded transition-all',
+                !useMdEditor ? 'bg-[#5B6AD7] text-white' : 'text-[#6B6B78] hover:text-[#2D2D35]'
               ]"
             >
               表单编辑
@@ -560,46 +543,46 @@ function getCategoryLabel(category) {
             <button
               @click="useMdEditor = true"
               :class="[
-                'px-2 py-1 text-xs rounded transition-all',
-                useMdEditor ? 'bg-accent text-white' : 'text-secondary hover:text-primary'
+                'px-2.5 py-1 text-[11px] rounded transition-all',
+                useMdEditor ? 'bg-[#5B6AD7] text-white' : 'text-[#6B6B78] hover:text-[#2D2D35]'
               ]"
             >
               Markdown
             </button>
           </div>
           <div class="flex items-center gap-2">
-            <button @click="cancelEditExcard" class="px-3 py-1.5 text-xs text-secondary hover:text-primary">取消</button>
-            <button @click="saveEditExcard" :disabled="saving" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50">{{ saving ? '保存中...' : '保存' }}</button>
-            <button @click="deleteExcard" class="px-3 py-1.5 text-xs border border-red-200 text-red-500 rounded-lg hover:bg-red-50">删除</button>
+            <button @click="cancelEditExcard" class="px-2.5 py-1 text-[11px] text-[#6B6B78] hover:text-[#2D2D35]">取消</button>
+            <button @click="saveEditExcard" :disabled="saving" class="px-2.5 py-1 text-[11px] bg-[#5B6AD7] text-white rounded-md hover:bg-[#4A58C0] disabled:opacity-50">{{ saving ? '保存中...' : '保存' }}</button>
+            <button @click="deleteExcard" class="px-2.5 py-1 text-[11px] border border-[#F0C8C8] text-[#C97A7A] rounded-md hover:bg-[#FDF0F0]">删除</button>
           </div>
         </div>
 
-        <div v-if="isEditing && useMdEditor" class="flex-1 p-4 overflow-hidden">
+        <div v-if="isEditing && useMdEditor" class="flex-1 p-3 overflow-hidden">
           <ExcardMdEditor v-model="store.selectedExcardMd" :readonly="false" />
         </div>
 
         <template v-else>
           <div class="flex-1 overflow-y-auto p-4">
-            <div class="text-xs text-muted font-mono mb-3">{{ selectedExcard.id }}</div>
+            <div class="text-[11px] text-[#9CA3AF] font-mono mb-3">{{ selectedExcard.id }}</div>
             <div class="space-y-4">
               <div>
-                <label class="block text-xs font-medium text-primary mb-1">名称</label>
-                <input v-model="editData.name" type="text" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent" />
+                <label class="block text-[11px] font-medium text-[#2D2D35] mb-1">名称</label>
+                <input v-model="editData.name" type="text" class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
               </div>
               <div>
-                <label class="block text-xs font-medium text-primary mb-1">描述</label>
-                <textarea v-model="editData.description" rows="2" class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                <label class="block text-[11px] font-medium text-[#2D2D35] mb-1">描述</label>
+                <textarea v-model="editData.description" rows="2" class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs font-medium text-primary mb-1">分类</label>
-                  <select v-model="editData.category" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface">
+                  <label class="block text-[11px] font-medium text-[#2D2D35] mb-1">分类</label>
+                  <select v-model="editData.category" class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] bg-white">
                     <option v-for="cat in categories" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
                   </select>
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-primary mb-1">绑定 Agent</label>
-                  <select v-model="editData.agent" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface">
+                  <label class="block text-[11px] font-medium text-[#2D2D35] mb-1">绑定 Agent</label>
+                  <select v-model="editData.agent" class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] bg-white">
                     <option value="">-- 选择 Agent --</option>
                     <option v-for="ag in availableAgents" :key="ag.id" :value="ag.name">
                       {{ ag.adapter ? `[${ag.adapter}] ` : '' }}{{ ag.name }}
@@ -608,79 +591,79 @@ function getCategoryLabel(category) {
                 </div>
               </div>
               <div>
-                <label class="block text-xs font-medium text-primary mb-1">标签</label>
+                <label class="block text-[11px] font-medium text-[#2D2D35] mb-1">标签</label>
                 <div class="flex items-center gap-2 mb-2">
-                  <input v-model="editNewTag" type="text" placeholder="添加标签..." class="flex-1 px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
-                  <button @click="() => { if (editNewTag.trim() && !editData.tags.includes(editNewTag.trim())) { editData.tags.push(editNewTag.trim()); editNewTag = '' } }" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">添加</button>
+                  <input v-model="editNewTag" type="text" placeholder="添加标签..." class="flex-1 px-3 py-1.5 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
+                  <button @click="() => { if (editNewTag.trim() && !editData.tags.includes(editNewTag.trim())) { editData.tags.push(editNewTag.trim()); editNewTag = '' } }" class="px-3 py-1.5 text-[11px] bg-[#5B6AD7] text-white rounded-md hover:bg-[#4A58C0]">添加</button>
                 </div>
                 <div class="flex flex-wrap gap-1.5">
                   <span
                     v-for="tag in editData.tags"
                     :key="tag"
-                    class="px-2 py-0.5 rounded text-xs bg-accent/10 text-accent flex items-center gap-1"
+                    class="px-2 py-0.5 rounded text-[11px] bg-[#F0F1FE] text-[#5B6AD7] flex items-center gap-1"
                   >
                     {{ tag }}
-                    <button @click="() => { const idx = editData.tags.indexOf(tag); if (idx >=0) editData.tags.splice(idx, 1) }" class="hover:text-red-500">×</button>
+                    <button @click="() => { const idx = editData.tags.indexOf(tag); if (idx >=0) editData.tags.splice(idx, 1) }" class="hover:text-[#C97A7A]">×</button>
                   </span>
                 </div>
               </div>
               <div>
-                <label class="block text-xs font-medium text-primary mb-1">资源依赖</label>
+                <label class="block text-[11px] font-medium text-[#2D2D35] mb-1">资源依赖</label>
                 <div class="flex items-center gap-2 mb-2">
-                  <input v-model="editNewResource" type="text" placeholder="例如：Skill/summarizer" class="flex-1 px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
-                  <button @click="() => { if (editNewResource.trim() && !editData.resources.some(r => (typeof r === 'object' ? r.name : r) === editNewResource.trim())) { editData.resources.push({ name: editNewResource.trim(), type: '', source: '', path: '', purpose: '' }); editNewResource = '' } }" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">添加</button>
+                  <input v-model="editNewResource" type="text" placeholder="例如：Skill/summarizer" class="flex-1 px-3 py-1.5 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
+                  <button @click="() => { if (editNewResource.trim() && !editData.resources.some(r => (typeof r === 'object' ? r.name : r) === editNewResource.trim())) { editData.resources.push({ name: editNewResource.trim(), type: '', source: '', path: '', purpose: '' }); editNewResource = '' } }" class="px-3 py-1.5 text-[11px] bg-[#5B6AD7] text-white rounded-md hover:bg-[#4A58C0]">添加</button>
                 </div>
                 <div class="space-y-1.5">
-                  <div v-for="(res, idx) in editData.resources" :key="idx" class="flex items-start gap-2 p-2 bg-surface-raised rounded-lg text-sm">
-                    <span class="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex-shrink-0">{{ typeof res === 'object' ? (res.type || 'Res') : 'Res' }}</span>
+                  <div v-for="(res, idx) in editData.resources" :key="idx" class="flex items-start gap-2 p-2 bg-[#F6F7FA] rounded-md text-[13px]">
+                    <span class="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F0FA] text-[#A67EC5] flex-shrink-0">{{ typeof res === 'object' ? (res.type || 'Res') : 'Res' }}</span>
                     <div class="flex-1 min-w-0">
-                      <div class="font-medium text-primary">{{ typeof res === 'object' ? res.name : res }}</div>
-                      <div v-if="typeof res === 'object' && (res.source || res.purpose)" class="text-xs text-muted mt-0.5">
+                      <div class="font-medium text-[#2D2D35]">{{ typeof res === 'object' ? res.name : res }}</div>
+                      <div v-if="typeof res === 'object' && (res.source || res.purpose)" class="text-[11px] text-[#9CA3AF] mt-0.5">
                         <span v-if="res.source">{{ res.source }}</span>
                         <span v-if="res.source && res.purpose"> · </span>
                         <span v-if="res.purpose">{{ res.purpose }}</span>
                       </div>
                     </div>
-                    <button @click="() => editData.resources.splice(idx, 1)" class="text-red-500 hover:text-red-600">×</button>
+                    <button @click="() => editData.resources.splice(idx, 1)" class="text-[#C97A7A] hover:text-[#B86565]">×</button>
                   </div>
                 </div>
               </div>
               <div>
-                <label class="block text-xs font-medium text-primary mb-1">执行工作流</label>
+                <label class="block text-[11px] font-medium text-[#2D2D35] mb-1">执行工作流</label>
                 <div class="grid grid-cols-2 gap-3 mb-2">
                   <div class="col-span-2">
-                    <input v-model="editNewStepName" type="text" placeholder="例如：采集数据源" class="w-full px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
+                    <input v-model="editNewStepName" type="text" placeholder="例如：采集数据源" class="w-full px-3 py-1.5 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
                   </div>
                   <div class="col-span-2">
-                    <textarea v-model="editNewStepDesc" rows="1" placeholder="Action / Input / Output" class="w-full px-3 py-1.5 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                    <textarea v-model="editNewStepDesc" rows="1" placeholder="Action / Input / Output" class="w-full px-3 py-1.5 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
                   </div>
                 </div>
-                <button @click="() => { if (editNewStepName.trim()) { editData.workflow.push({ index: editData.workflow.length + 1, name: editNewStepName.trim(), description: editNewStepDesc.trim() }); editNewStepName = ''; editNewStepDesc = '' } }" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover mb-2">添加步骤</button>
+                <button @click="() => { if (editNewStepName.trim()) { editData.workflow.push({ index: editData.workflow.length + 1, name: editNewStepName.trim(), description: editNewStepDesc.trim() }); editNewStepName = ''; editNewStepDesc = '' } }" class="px-3 py-1.5 text-[11px] bg-[#5B6AD7] text-white rounded-md hover:bg-[#4A58C0] mb-2">添加步骤</button>
                 <div class="space-y-1.5">
-                  <div v-for="(step, idx) in editData.workflow" :key="idx" class="flex items-start gap-2 p-2 bg-surface-raised rounded-lg text-sm">
-                    <span class="text-xs bg-accent text-white px-2 py-0.5 rounded flex-shrink-0">{{ step.index }}</span>
+                  <div v-for="(step, idx) in editData.workflow" :key="idx" class="flex items-start gap-2 p-2 bg-[#F6F7FA] rounded-md text-[13px]">
+                    <span class="text-[11px] bg-[#5B6AD7] text-white px-2 py-0.5 rounded flex-shrink-0">{{ step.index }}</span>
                     <div class="flex-1 min-w-0">
-                      <div class="font-medium text-primary">{{ step.name }}</div>
-                      <div class="text-xs text-muted mt-0.5">{{ step.description }}</div>
+                      <div class="font-medium text-[#2D2D35]">{{ step.name }}</div>
+                      <div class="text-[11px] text-[#9CA3AF] mt-0.5">{{ step.description }}</div>
                     </div>
-                    <button @click="() => { editData.workflow.splice(idx, 1); editData.workflow.forEach((s, i) => s.index = i + 1) }" class="text-red-500 hover:text-red-600">×</button>
+                    <button @click="() => { editData.workflow.splice(idx, 1); editData.workflow.forEach((s, i) => s.index = i + 1) }" class="text-[#C97A7A] hover:text-[#B86565]">×</button>
                   </div>
                 </div>
               </div>
               <div>
-                <label class="block text-xs font-medium text-primary mb-1">执行约定</label>
+                <label class="block text-[11px] font-medium text-[#2D2D35] mb-1">执行约定</label>
                 <div class="space-y-2">
                   <div>
-                    <label class="text-xs text-muted mb-1 block">输入约定</label>
-                    <textarea v-model="editData.conventions.input" rows="2" class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                    <label class="text-[11px] text-[#9CA3AF] mb-1 block">输入约定</label>
+                    <textarea v-model="editData.conventions.input" rows="2" class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
                   </div>
                   <div>
-                    <label class="text-xs text-muted mb-1 block">输出约定</label>
-                    <textarea v-model="editData.conventions.output" rows="2" class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                    <label class="text-[11px] text-[#9CA3AF] mb-1 block">输出约定</label>
+                    <textarea v-model="editData.conventions.output" rows="2" class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
                   </div>
                   <div>
-                    <label class="text-xs text-muted mb-1 block">错误处理</label>
-                    <textarea v-model="editData.conventions.errorHandling" rows="2" class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                    <label class="text-[11px] text-[#9CA3AF] mb-1 block">错误处理</label>
+                    <textarea v-model="editData.conventions.errorHandling" rows="2" class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
                   </div>
                 </div>
               </div>
@@ -691,54 +674,56 @@ function getCategoryLabel(category) {
 
       <div
         v-if="!store.selectedExcard"
-        class="w-[450px] flex-shrink-0 bg-surface rounded-xl border border-border flex flex-col items-center justify-center text-muted"
+        class="w-[420px] flex-shrink-0 bg-white rounded-md border border-[#E8E8EC] flex flex-col items-center justify-center text-[#9CA3AF]"
       >
-        <div class="text-4xl mb-3">📋</div>
-        <div class="text-base font-medium">点击 ExCard 查看详情</div>
-        <div class="text-sm mt-1">支持表单编辑和 Markdown 编辑</div>
+        <svg class="w-10 h-10 text-[#C5C9D3] mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <div class="text-[13px] font-medium">点击 ExCard 查看详情</div>
+        <div class="text-[12px] mt-1">支持表单编辑和 Markdown 编辑</div>
       </div>
     </div>
 
     <Teleport to="body">
       <div
         v-if="showCreateModal"
-        class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+        class="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
         @click.self="showCreateModal = false"
       >
-        <div class="bg-surface rounded-xl shadow-lg w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col animate-fade-in">
-          <div class="px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
+        <div class="bg-white rounded-md w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col animate-fade-in border border-[#E8E8EC]">
+          <div class="px-5 py-3 border-b border-[#ECECF0] flex items-center justify-between flex-shrink-0">
             <div>
-              <h3 class="text-lg font-semibold text-primary">新建 ExCard</h3>
-              <p class="text-sm text-muted mt-0.5">创建标准化执行模板</p>
+              <h3 class="text-[15px] font-semibold text-[#2D2D35]">新建 ExCard</h3>
+              <p class="text-[12px] text-[#9CA3AF] mt-0.5">创建标准化执行模板</p>
             </div>
-            <button @click="showCreateModal = false" class="text-muted hover:text-primary">
+            <button @click="showCreateModal = false" class="text-[#9CA3AF] hover:text-[#2D2D35] transition-colors">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l18 12" />
               </svg>
             </button>
           </div>
 
-          <div class="flex-1 overflow-y-auto p-6 space-y-5">
+          <div class="flex-1 overflow-y-auto p-5 space-y-5">
             <div class="space-y-3">
-              <h4 class="text-sm font-semibold text-primary border-b border-border pb-1">基本信息</h4>
+              <h4 class="text-[13px] font-semibold text-[#2D2D35] border-b border-[#ECECF0] pb-1">基本信息</h4>
               <div>
-                <label class="block text-sm font-medium text-primary mb-1">名称 <span class="text-red-500">*</span></label>
-                <input v-model="newExcard.name" type="text" placeholder="例如：EC-001-daily-report" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent" />
+                <label class="block text-[13px] font-medium text-[#2D2D35] mb-1">名称 <span class="text-[#C97A7A]">*</span></label>
+                <input v-model="newExcard.name" type="text" placeholder="例如：EC-001-daily-report" class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
               </div>
               <div>
-                <label class="block text-sm font-medium text-primary mb-1">描述</label>
-                <textarea v-model="newExcard.description" rows="2" placeholder="一句话描述这个 ExCard 的用途和使用场景..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                <label class="block text-[13px] font-medium text-[#2D2D35] mb-1">描述</label>
+                <textarea v-model="newExcard.description" rows="2" placeholder="一句话描述这个 ExCard 的用途和使用场景..." class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-sm font-medium text-primary mb-1">分类</label>
-                  <select v-model="newExcard.category" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface">
+                  <label class="block text-[13px] font-medium text-[#2D2D35] mb-1">分类</label>
+                  <select v-model="newExcard.category" class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] bg-white">
                     <option v-for="cat in categories" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
                   </select>
                 </div>
                 <div>
-                  <label class="block text-sm font-medium text-primary mb-1">绑定 Agent</label>
-                  <select v-model="newExcard.agent" class="w-full px-3 py-2 border border-border rounded-lg text-sm outline-none focus:border-accent bg-surface">
+                  <label class="block text-[13px] font-medium text-[#2D2D35] mb-1">绑定 Agent</label>
+                  <select v-model="newExcard.agent" class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] bg-white">
                     <option value="">-- 选择 Agent --</option>
                     <option v-for="ag in availableAgents" :key="ag.id" :value="ag.name">
                       {{ ag.adapter ? `[${ag.adapter}] ` : '' }}{{ ag.name }}
@@ -747,91 +732,91 @@ function getCategoryLabel(category) {
                 </div>
               </div>
               <div>
-                <label class="block text-sm font-medium text-primary mb-1">标签</label>
+                <label class="block text-[13px] font-medium text-[#2D2D35] mb-1">标签</label>
                 <div class="flex items-center gap-2">
-                  <input v-model="newTag" type="text" placeholder="添加标签..." class="flex-1 px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
-                  <button @click="addTag" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">添加</button>
+                  <input v-model="newTag" type="text" placeholder="添加标签..." class="flex-1 px-3 py-1.5 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
+                  <button @click="addTag" class="px-3 py-1.5 text-[11px] bg-[#5B6AD7] text-white rounded-md hover:bg-[#4A58C0]">添加</button>
                 </div>
                 <div class="flex flex-wrap gap-1.5 mt-1.5">
                   <span
                     v-for="tag in newExcard.tags"
                     :key="tag"
-                    class="px-2 py-0.5 rounded text-xs bg-accent/10 text-accent flex items-center gap-1"
+                    class="px-2 py-0.5 rounded text-[11px] bg-[#F0F1FE] text-[#5B6AD7] flex items-center gap-1"
                   >
                     {{ tag }}
-                    <button @click="removeTag(tag)" class="hover:text-red-500">×</button>
+                    <button @click="removeTag(tag)" class="hover:text-[#C97A7A]">×</button>
                   </span>
                 </div>
               </div>
             </div>
 
             <div class="space-y-3">
-              <h4 class="text-sm font-semibold text-primary border-b border-border pb-1">资源依赖</h4>
+              <h4 class="text-[13px] font-semibold text-[#2D2D35] border-b border-[#ECECF0] pb-1">资源依赖</h4>
               <div class="flex items-center gap-2">
-                <input v-model="newResource" type="text" placeholder="例如：Skill/summarizer" class="flex-1 px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
-                <button @click="addResource" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">添加</button>
+                <input v-model="newResource" type="text" placeholder="例如：Skill/summarizer" class="flex-1 px-3 py-1.5 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
+                <button @click="addResource" class="px-3 py-1.5 text-[11px] bg-[#5B6AD7] text-white rounded-md hover:bg-[#4A58C0]">添加</button>
               </div>
               <div class="space-y-1.5">
-                <div v-for="(res, idx) in newExcard.resources" :key="idx" class="flex items-start gap-2 p-2 bg-surface-raised rounded-lg text-sm">
-                  <span class="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 flex-shrink-0">{{ typeof res === 'object' ? (res.type || 'Res') : 'Res' }}</span>
+                <div v-for="(res, idx) in newExcard.resources" :key="idx" class="flex items-start gap-2 p-2 bg-[#F6F7FA] rounded-md text-[13px]">
+                  <span class="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F0FA] text-[#A67EC5] flex-shrink-0">{{ typeof res === 'object' ? (res.type || 'Res') : 'Res' }}</span>
                   <div class="flex-1 min-w-0">
-                    <div class="font-medium text-primary">{{ typeof res === 'object' ? res.name : res }}</div>
-                    <div v-if="typeof res === 'object' && (res.source || res.purpose)" class="text-xs text-muted mt-0.5">
+                    <div class="font-medium text-[#2D2D35]">{{ typeof res === 'object' ? res.name : res }}</div>
+                    <div v-if="typeof res === 'object' && (res.source || res.purpose)" class="text-[11px] text-[#9CA3AF] mt-0.5">
                       <span v-if="res.source">{{ res.source }}</span>
                       <span v-if="res.source && res.purpose"> · </span>
                       <span v-if="res.purpose">{{ res.purpose }}</span>
                     </div>
                   </div>
-                  <button @click="removeResource(idx)" class="text-red-500 hover:text-red-600">×</button>
+                  <button @click="removeResource(idx)" class="text-[#C97A7A] hover:text-[#B86565]">×</button>
                 </div>
               </div>
             </div>
 
             <div class="space-y-3">
-              <h4 class="text-sm font-semibold text-primary border-b border-border pb-1">执行工作流</h4>
+              <h4 class="text-[13px] font-semibold text-[#2D2D35] border-b border-[#ECECF0] pb-1">执行工作流</h4>
               <div class="grid grid-cols-2 gap-3">
                 <div class="col-span-2">
-                  <label class="block text-sm font-medium text-primary mb-1">步骤名称</label>
-                  <input v-model="newStepName" type="text" placeholder="例如：采集数据源" class="w-full px-3 py-1.5 border border-border rounded-lg text-sm outline-none focus:border-accent" />
+                  <label class="block text-[13px] font-medium text-[#2D2D35] mb-1">步骤名称</label>
+                  <input v-model="newStepName" type="text" placeholder="例如：采集数据源" class="w-full px-3 py-1.5 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
                 </div>
                 <div class="col-span-2">
-                  <label class="block text-sm font-medium text-primary mb-1">步骤描述</label>
-                  <textarea v-model="newStepDesc" rows="2" placeholder="具体执行动作和验证标准..." class="w-full px-3 py-1.5 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                  <label class="block text-[13px] font-medium text-[#2D2D35] mb-1">步骤描述</label>
+                  <textarea v-model="newStepDesc" rows="2" placeholder="具体执行动作和验证标准..." class="w-full px-3 py-1.5 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
                 </div>
               </div>
-              <button @click="addStep" class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg hover:bg-accent-hover">添加步骤</button>
+              <button @click="addStep" class="px-3 py-1.5 text-[11px] bg-[#5B6AD7] text-white rounded-md hover:bg-[#4A58C0]">添加步骤</button>
               <div class="space-y-1.5">
-                <div v-for="(step, idx) in newExcard.workflow" :key="idx" class="flex items-start gap-2 p-2 bg-surface-raised rounded-lg">
-                  <span class="text-xs bg-accent text-white px-2 py-0.5 rounded flex-shrink-0">{{ step.index }}</span>
+                <div v-for="(step, idx) in newExcard.workflow" :key="idx" class="flex items-start gap-2 p-2 bg-[#F6F7FA] rounded-md">
+                  <span class="text-[11px] bg-[#5B6AD7] text-white px-2 py-0.5 rounded flex-shrink-0">{{ step.index }}</span>
                   <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-primary">{{ step.name }}</div>
-                    <div class="text-xs text-muted mt-0.5">{{ step.description }}</div>
+                    <div class="text-[13px] font-medium text-[#2D2D35]">{{ step.name }}</div>
+                    <div class="text-[11px] text-[#9CA3AF] mt-0.5">{{ step.description }}</div>
                   </div>
-                  <button @click="removeStep(idx)" class="text-red-500 hover:text-red-600">×</button>
+                  <button @click="removeStep(idx)" class="text-[#C97A7A] hover:text-[#B86565]">×</button>
                 </div>
               </div>
             </div>
 
             <div class="space-y-3">
-              <h4 class="text-sm font-semibold text-primary border-b border-border pb-1">执行约定</h4>
+              <h4 class="text-[13px] font-semibold text-[#2D2D35] border-b border-[#ECECF0] pb-1">执行约定</h4>
               <div>
-                <label class="block text-sm font-medium text-primary mb-1">输入约定</label>
-                <textarea v-model="newExcard.conventions.input" rows="2" placeholder="数据来源路径、格式要求、前置条件..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                <label class="block text-[13px] font-medium text-[#2D2D35] mb-1">输入约定</label>
+                <textarea v-model="newExcard.conventions.input" rows="2" placeholder="数据来源路径、格式要求、前置条件..." class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
               </div>
               <div>
-                <label class="block text-sm font-medium text-primary mb-1">输出约定</label>
-                <textarea v-model="newExcard.conventions.output" rows="2" placeholder="保存位置、输出格式、状态记录..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                <label class="block text-[13px] font-medium text-[#2D2D35] mb-1">输出约定</label>
+                <textarea v-model="newExcard.conventions.output" rows="2" placeholder="保存位置、输出格式、状态记录..." class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
               </div>
               <div>
-                <label class="block text-sm font-medium text-primary mb-1">错误处理</label>
-                <textarea v-model="newExcard.conventions.errorHandling" rows="2" placeholder="错误场景及处理方式（表格格式）..." class="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none outline-none focus:border-accent" />
+                <label class="block text-[13px] font-medium text-[#2D2D35] mb-1">错误处理</label>
+                <textarea v-model="newExcard.conventions.errorHandling" rows="2" placeholder="错误场景及处理方式（表格格式）..." class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all" />
               </div>
             </div>
           </div>
 
-          <div class="px-6 py-4 border-t border-border flex justify-end gap-3 flex-shrink-0">
-            <button @click="showCreateModal = false" class="px-4 py-2 text-sm text-secondary hover:text-primary">取消</button>
-            <button @click="createExcard" :disabled="!newExcard.name" class="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed">创建</button>
+          <div class="px-5 py-3 border-t border-[#ECECF0] flex justify-end gap-3 flex-shrink-0">
+            <button @click="showCreateModal = false" class="px-4 py-2 text-[13px] text-[#6B6B78] hover:text-[#2D2D35] transition-colors">取消</button>
+            <button @click="createExcard" :disabled="!newExcard.name" class="px-4 py-2 bg-[#5B6AD7] text-white rounded-md text-[13px] font-medium hover:bg-[#4A58C0] disabled:opacity-40 disabled:cursor-not-allowed">创建</button>
           </div>
         </div>
       </div>

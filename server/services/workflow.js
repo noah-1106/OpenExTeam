@@ -570,6 +570,53 @@ function handleAgentReply(agentName, message, jobId) {
   }
 }
 
+/**
+ * 重试失败的步骤
+ */
+function retryStep(jobId, stepId) {
+  try {
+    const job = getJob(jobId);
+    if (!job) return { success: false, error: 'Job not found' };
+
+    const steps = getJobSteps(jobId);
+    const step = steps.find(s => s.id === stepId);
+    if (!step) return { success: false, error: 'Step not found' };
+    if (step.status !== 'error') return { success: false, error: '只能重试失败的步骤' };
+
+    const stepIndex = steps.indexOf(step) + 1;
+    const agentName = step.agent || job.agent;
+    if (!agentName) return { success: false, error: '步骤未指定 Agent' };
+
+    // 重置步骤和工作状态
+    beginTransaction();
+    try {
+      updateStep(stepId, { status: 'pending' });
+      queryRun('UPDATE jobs SET status=? WHERE id=?', ['in-progress', jobId]);
+      queryRun('UPDATE workflow_state SET status=?, current_step=? WHERE job_id=?', ['running', stepIndex, jobId]);
+      commitTransaction();
+    } catch (txErr) {
+      rollbackTransaction();
+      return { success: false, error: txErr.message };
+    }
+
+    // 重新发送步骤给 Agent
+    sendJobStepToAgent(job, step, stepIndex, steps, agentName);
+
+    broadcast('workflow_step_advanced', { jobId, currentStep: stepIndex, totalSteps: steps.length });
+    sendSystemMessageToChat(jobId, 'workflow_retry', {
+      title: '步骤重试',
+      message: `正在重新执行第 ${stepIndex}/${steps.length} 步`,
+      currentStep: stepIndex,
+      totalSteps: steps.length
+    }, agentName);
+
+    return { success: true, stepIndex, totalSteps: steps.length };
+  } catch (err) {
+    console.error('[Workflow] retryStep error:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 function completeWorkflow(jobId, agentName = null) {
   try {
     beginTransaction();
@@ -623,6 +670,7 @@ module.exports = {
   completeWorkflow,
   getWorkflowStatus,
   handleAgentReply,
+  retryStep,
   setActiveWorkflowsRef,
   setActiveAdaptersRef,
   sendSystemMessageToChat,

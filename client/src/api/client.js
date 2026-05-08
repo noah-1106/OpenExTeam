@@ -117,6 +117,7 @@ const api = {
   // --- Workflow ---
   startWorkflow: (jobId) => request('POST', '/api/workflow/start', { jobId }),
   getWorkflowStatus: (jobId) => request('GET', `/api/workflow/status?jobId=${jobId}`),
+  retryStep: (jobId, stepId) => request('POST', '/api/workflow/retry-step', { jobId, stepId }),
 
   // --- ExCards ---
   getExcards: () => request('GET', '/api/excards'),

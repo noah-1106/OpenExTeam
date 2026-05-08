@@ -15,7 +15,6 @@ const isOpen = computed(() => props.show)
 const creating = ref(false)
 const validationErrors = ref({})
 
-// 表单数据
 const form = ref({
   id: '',
   name: '',
@@ -28,7 +27,6 @@ watch(() => props.agentId, (newId) => {
   form.value.agent = newId
 })
 
-// 生成一个简单的 ID
 function generateId(name) {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   const randomStr = Math.random().toString(36).substring(2, 8)
@@ -68,55 +66,56 @@ function clearValidationError(field) {
 <template>
   <Teleport to="body">
     <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="handleClose"></div>
-      <div class="relative bg-surface rounded-xl shadow-xl border border-border w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col animate-fade-in">
-        <!-- Header -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
+      <div class="absolute inset-0 bg-black/30" @click="handleClose"></div>
+      <div class="relative bg-white rounded-md border border-[#E8E8EC] w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col animate-fade-in">
+        <div class="flex items-center justify-between px-5 py-3 border-b border-[#ECECF0]">
           <div>
-            <h3 class="font-semibold text-primary">创建 ExCard</h3>
-            <p class="text-xs text-muted mt-1">创建标准化执行模板，定义 Agent 如何执行任务</p>
+            <h3 class="text-[15px] font-semibold text-[#2D2D35]">创建 ExCard</h3>
+            <p class="text-[12px] text-[#9CA3AF] mt-0.5">创建标准化执行模板，定义 Agent 如何执行任务</p>
           </div>
-          <button @click="handleClose" class="text-muted hover:text-primary text-xl leading-none">×</button>
+          <button @click="handleClose" class="text-[#9CA3AF] hover:text-[#2D2D35] transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l18 12" />
+            </svg>
+          </button>
         </div>
 
-        <!-- Content -->
-        <div class="flex-1 overflow-y-auto p-6 space-y-4">
+        <div class="flex-1 overflow-y-auto p-5 space-y-4">
           <div>
-            <label class="block text-sm font-medium text-primary mb-1.5">ExCard 名称 *</label>
+            <label class="block text-[13px] font-medium text-[#2D2D35] mb-1.5">ExCard 名称 *</label>
             <input v-model="form.name" @input="clearValidationError('name')" type="text" placeholder="例如：EC-001-daily-report"
-              :class="['w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm outline-none focus:ring-2 focus:ring-accent focus:border-transparent', validationErrors.name ? 'border-red-400' : 'border-border']"
+              :class="['w-full px-3 py-2 border rounded-md text-[13px] outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all', validationErrors.name ? 'border-[#C97A7A]' : 'border-[#E8E8EC]']"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-primary mb-1.5">描述</label>
+            <label class="block text-[13px] font-medium text-[#2D2D35] mb-1.5">描述</label>
             <textarea v-model="form.description" rows="2" placeholder="一句话描述这个 ExCard 的用途和使用场景"
-              class="w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+              class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all"
             ></textarea>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-primary mb-1.5">绑定 Agent</label>
+            <label class="block text-[13px] font-medium text-[#2D2D35] mb-1.5">绑定 Agent</label>
             <input v-model="form.agent" type="text" placeholder="Agent ID"
-              :class="[form.agent ? 'bg-gray-50 text-muted' : '']"
-              class="w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+              :class="[form.agent ? 'bg-[#F6F7FA] text-[#9CA3AF]' : '']"
+              class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-primary mb-1.5">Markdown 内容 *</label>
+            <label class="block text-[13px] font-medium text-[#2D2D35] mb-1.5">Markdown 内容 *</label>
             <textarea v-model="form.markdown" @input="clearValidationError('markdown')" rows="10" placeholder="# EC-XXX: 卡片名称&#10;&#10;## Resource Dependencies&#10;&#10;### 资源名称&#10;- **Type**: Skill/File/Directory&#10;- **Purpose**: 用途说明&#10;&#10;## Execution Workflow&#10;&#10;### Step 1: 步骤名称&#10;- **Action**: 具体执行动作&#10;- **Checkpoint**: 验证标准&#10;&#10;## Execution Conventions&#10;&#10;### Input Conventions&#10;- **数据来源**: ..."
-              :class="['w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-mono', validationErrors.markdown ? 'border-red-400' : 'border-border']"
+              :class="['w-full px-3 py-2 border rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all font-mono', validationErrors.markdown ? 'border-[#C97A7A]' : 'border-[#E8E8EC]']"
             ></textarea>
           </div>
         </div>
 
-        <!-- Footer -->
-        <div class="flex justify-end gap-3 px-6 py-4 border-t border-border-subtle">
-          <button @click="handleClose" class="px-4 py-2 text-sm text-secondary hover:text-primary transition-colors">
+        <div class="flex justify-end gap-3 px-5 py-3 border-t border-[#ECECF0]">
+          <button @click="handleClose" class="px-4 py-2 text-[13px] text-[#6B6B78] hover:text-[#2D2D35] transition-colors">
             取消
           </button>
-          <button @click="handleCreate" :disabled="creating" class="px-4 py-2 text-sm bg-accent text-white rounded-lg font-medium hover:bg-accent-hover transition-colors disabled:opacity-50">
+          <button @click="handleCreate" :disabled="creating" class="px-4 py-2 text-[13px] bg-[#5B6AD7] text-white rounded-md font-medium hover:bg-[#4A58C0] transition-colors disabled:opacity-50">
             {{ creating ? '创建中...' : '创建 ExCard' }}
           </button>
         </div>

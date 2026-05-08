@@ -5,27 +5,23 @@ const props = defineProps({
 const emit = defineEmits(['click'])
 
 const priorityStyles = {
-  high: { bg: 'bg-surface-raised', text: 'text-red-600', label: '高' },
-  medium: { bg: 'bg-yellow-50', text: 'text-yellow-600', label: '中' },
-  low: { bg: 'bg-green-50', text: 'text-green-600', label: '低' },
+  high: { bg: 'bg-[#FDF0F0]', text: 'text-[#C97A7A]', label: '高' },
+  medium: { bg: 'bg-[#FDF5EC]', text: 'text-[#A87D4A]', label: '中' },
+  low: { bg: 'bg-[#EDF7F3]', text: 'text-[#4E917A]', label: '低' },
 }
 
-const agentAvatars = {
-  '品品': '👩‍💼',
-  '开开': '👨‍💻',
-  '前前': '👨‍🎨',
-  '维维': '👨‍🔧',
-  '测测': '🧪',
+function getAgentInitial(name) {
+  if (!name) return '?'
+  return name.charAt(0).toUpperCase()
 }
 </script>
 
 <template>
-  <div class="bg-surface rounded-xl p-4 shadow-xs hover:shadow-xs transition-all duration-150 cursor-pointer border border-border-subtle" @click="emit('click', task)">
-    <!-- Priority Badge -->
+  <div class="bg-white rounded-md p-4 border border-[#E8E8EC] hover:border-[#C5C9D3] transition-all duration-150 cursor-pointer" @click="emit('click', task)">
     <div class="flex items-center gap-2 mb-2">
       <span
         :class="[
-          'px-2 py-0.5 rounded text-xs font-medium',
+          'px-2 py-0.5 rounded text-[11px] font-medium',
           priorityStyles[task.priority]?.bg,
           priorityStyles[task.priority]?.text
         ]"
@@ -34,34 +30,21 @@ const agentAvatars = {
       </span>
     </div>
 
-    <!-- Title -->
-    <h4 class="font-medium text-primary mb-1 leading-snug">{{ task.title }}</h4>
+    <h4 class="text-[13px] font-medium text-[#2D2D35] mb-1 leading-snug">{{ task.title }}</h4>
 
-    <!-- Description -->
-    <p v-if="task.description" class="text-sm text-secondary mb-3 line-clamp-2">
+    <p v-if="task.description" class="text-[12px] text-[#6B6B78] mb-3 line-clamp-2">
       {{ task.description }}
     </p>
 
-    <!-- Footer -->
-    <div class="flex items-center justify-between mt-3 pt-3 border-t border-50">
-      <!-- Agent -->
-      <div class="flex items-center gap-1.5">
-        <span class="text-sm">{{ agentAvatars[task.agent] || '👤' }}</span>
-        <span class="text-xs text-secondary">{{ task.agent }}</span>
+    <div class="flex items-center justify-between mt-3 pt-3 border-t border-[#ECECF0]">
+      <div class="flex items-center gap-2">
+        <div class="w-5 h-5 rounded-sm bg-[#F0F0F4] flex items-center justify-center text-[10px] font-semibold text-[#6B6B78]">
+          {{ getAgentInitial(task.agent) }}
+        </div>
+        <span class="text-[11px] text-[#6B6B78]">{{ task.agent }}</span>
       </div>
 
-      <!-- Date -->
-      <span class="text-xs text-muted">{{ task.createdAt }}</span>
-    </div>
-
-    <!-- Task Actions (shown on hover) -->
-    <div class="flex items-center gap-2 mt-3 opacity-0 hover:opacity-100 transition-opacity">
-      <button class="flex-1 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors">
-        分配
-      </button>
-      <button class="flex-1 py-1 text-xs text-primary hover:bg-bg rounded transition-colors">
-        详情
-      </button>
+      <span class="text-[11px] text-[#9CA3AF]">{{ task.createdAt }}</span>
     </div>
   </div>
 </template>

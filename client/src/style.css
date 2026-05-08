@@ -3,20 +3,20 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: #FAFAF8;
+  --color-bg: #F6F6F8;
   --color-surface: #FFFFFF;
-  --color-surface-raised: #F5F4F0;
-  --color-border: #E8E6E1;
-  --color-border-subtle: #F0EEE9;
-  --color-text-primary: #1C1917;
-  --color-text-secondary: #78716C;
-  --color-text-muted: #A8A29E;
-  --color-accent: #E5702A;
-  --color-accent-hover: #C85A1E;
-  --color-accent-dim: rgba(229, 112, 42, 0.1);
-  --radius-card: 12px;
-  --radius-btn: 8px;
-  --radius-sm: 6px;
+  --color-surface-raised: #F7F7FA;
+  --color-border: #E8E8EC;
+  --color-border-subtle: #ECECF0;
+  --color-text-primary: #2D2D35;
+  --color-text-secondary: #6B6B78;
+  --color-text-muted: #9CA3AF;
+  --color-accent: #5B6AD7;
+  --color-accent-hover: #4A58C0;
+  --color-accent-dim: rgba(91, 106, 215, 0.08);
+  --radius-card: 6px;
+  --radius-btn: 6px;
+  --radius-sm: 4px;
 }
 
 * {
@@ -30,97 +30,88 @@ html {
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #FAFAF8;
-  color: #1C1917;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background-color: #F6F6F8;
+  color: #2D2D35;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* Scrollbar - minimal */
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #D6D3D1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #A8A29E; }
+::-webkit-scrollbar-thumb { background: #C5C9D3; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
 
 /* Selection */
-::selection { background-color: rgba(229, 112, 42, 0.15); color: #1C1917; }
+::selection { background-color: rgba(91, 106, 215, 0.12); color: #2D2D35; }
 
 /* Focus */
-:focus-visible { outline: 2px solid #E5702A; outline-offset: 2px; border-radius: 4px; }
+:focus-visible { outline: 2px solid #5B6AD7; outline-offset: 2px; border-radius: 4px; }
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
 }
-@keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
-}
 .animate-fade-in { animation: fadeIn 0.2s ease-out; }
-.animate-slide-in-right { animation: slideInRight 0.2s ease-out; }
 
 /* Surface layers */
-.surface-base { background-color: #FAFAF8; }
+.surface-base { background-color: #F6F6F8; }
 .surface { background-color: #FFFFFF; }
-.surface-raised { background-color: #F5F4F0; }
-.border-subtle { border-color: #F0EEE9; }
-.border-default { border-color: #E8E6E1; }
-.text-secondary { color: #78716C; }
-.text-muted { color: #A8A29E; }
-.text-accent { color: #E5702A; }
+.surface-raised { background-color: #F7F7FA; }
+
+/* Buttons */
+.btn-accent {
+  background-color: #5B6AD7;
+  color: #FFFFFF;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 14px;
+  transition: background-color 0.15s ease;
+}
+.btn-accent:hover { background-color: #4A58C0; }
+
+.btn-ghost {
+  background-color: transparent;
+  color: #6B6B78;
+  border-radius: 6px;
+  font-weight: 400;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.btn-ghost:hover { background-color: #F0F0F4; color: #2D2D35; }
+
+/* Input */
+.input {
+  background: #FFFFFF;
+  border: 1px solid #E8E8EC;
+  border-radius: 6px;
+  color: #2D2D35;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.input:focus { border-color: #5B6AD7; box-shadow: 0 0 0 3px rgba(91,106,215,0.08); outline: none; }
+.input::placeholder { color: #9CA3AF; }
 
 /* Cards */
 .card {
   background: #FFFFFF;
-  border-radius: 12px;
-  border: 1px solid #E8E6E1;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  border-radius: 6px;
+  border: 1px solid #E8E8EC;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
-  border-color: #D6D3D1;
+  border-color: #C5C9D3;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
-/* Accent */
-.accent { color: #E5702A; }
-.accent-bg { background-color: rgba(229, 112, 42, 0.1); color: #E5702A; }
-.accent-hover:hover { background-color: rgba(229, 112, 42, 0.15); }
-
-/* Buttons */
-.btn-accent {
-  background-color: #E5702A;
-  color: #FFFFFF;
-  border-radius: 8px;
-  font-weight: 500;
-  transition: background-color 0.15s ease;
-}
-.btn-accent:hover { background-color: #C85A1E; }
-
-/* Input - bottom border only */
-.input {
-  background: transparent;
-  border: none;
-  border-bottom: 1.5px solid #D6D3D1;
-  border-radius: 0;
-  color: #1C1917;
-  transition: border-color 0.15s ease;
-}
-.input:focus { border-bottom-color: #E5702A; outline: none; }
-.input::placeholder { color: #A8A29E; }
-
-/* Tabs */
-.tab { color: #78716C; border-radius: 8px; transition: color 0.15s ease, background-color 0.15s ease; }
-.tab:hover { color: #1C1917; background-color: rgba(0,0,0,0.04); }
-.tab-active { color: #1C1917; background-color: rgba(229,112,42,0.08); font-weight: 500; }
-.tab-active:hover { background-color: rgba(229,112,42,0.12); }
-
-/* Markdown Styles */
+/* Markdown Styles - clean */
 .prose {
-  line-height: 1.6;
+  line-height: 1.7;
+  font-size: 14px;
 }
 .prose p {
   margin-bottom: 0.75em;
@@ -142,19 +133,21 @@ body {
   margin-bottom: 0.25em;
 }
 .prose code {
-  background-color: rgba(0,0,0,0.05);
-  padding: 0.125em 0.375em;
-  border-radius: 0.25em;
+  background-color: #F0F0F4;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
   font-size: 0.9em;
+  color: #5A5A68;
 }
 .prose pre {
-  background-color: #1C1917;
-  color: #F5F4F0;
+  background-color: #2D2D35;
+  color: #F0F0F4;
   padding: 0.75em 1em;
-  border-radius: 0.5em;
+  border-radius: 6px;
   overflow-x: auto;
   margin-bottom: 0.75em;
+  font-size: 13px;
 }
 .prose pre code {
   background-color: transparent;
@@ -162,74 +155,75 @@ body {
   color: inherit;
 }
 .prose blockquote {
-  border-left: 3px solid #E5702A;
+  border-left: 3px solid #5B6AD7;
   padding-left: 1em;
   margin-left: 0;
   margin-bottom: 0.75em;
-  color: #78716C;
+  color: #6B6B78;
 }
 .prose h1, .prose h2, .prose h3, .prose h4 {
   font-weight: 600;
-  margin-top: 1em;
+  margin-top: 1.2em;
   margin-bottom: 0.5em;
 }
 .prose h1:first-child, .prose h2:first-child, .prose h3:first-child, .prose h4:first-child {
   margin-top: 0;
 }
-.prose h1 { font-size: 1.5em; }
-.prose h2 { font-size: 1.25em; }
-.prose h3 { font-size: 1.125em; }
+.prose h1 { font-size: 1.4em; }
+.prose h2 { font-size: 1.2em; }
+.prose h3 { font-size: 1.1em; }
 .prose h4 { font-size: 1em; }
 .prose a {
-  color: #E5702A;
-  text-decoration: underline;
+  color: #5B6AD7;
+  text-decoration: none;
 }
 .prose a:hover {
-  color: #C85A1E;
+  text-decoration: underline;
 }
 .prose table {
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 0.75em;
+  font-size: 13px;
 }
 .prose th, .prose td {
-  border: 1px solid #E8E6E1;
+  border: 1px solid #E8E8EC;
   padding: 0.5em 0.75em;
   text-align: left;
 }
 .prose th {
-  background-color: #F5F4F0;
+  background-color: #F6F7FA;
   font-weight: 600;
 }
 .prose hr {
   border: none;
-  border-top: 1px solid #E8E6E1;
+  border-top: 1px solid #E8E8EC;
   margin: 1.5em 0;
 }
 
-/* User message markdown (inverted colors) */
+/* User message markdown */
 .prose-invert {
   color: white;
 }
 .prose-invert code {
-  background-color: rgba(255,255,255,0.2);
+  background-color: rgba(255,255,255,0.15);
 }
 .prose-invert pre {
   background-color: rgba(0,0,0,0.3);
 }
 .prose-invert blockquote {
-  border-left-color: rgba(255,255,255,0.5);
-  color: rgba(255,255,255,0.8);
+  border-left-color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.85);
 }
 .prose-invert a {
-  color: white;
+  color: #8BA4E0;
 }
 .prose-invert th, .prose-invert td {
-  border-color: rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.15);
 }
 .prose-invert th {
-  background-color: rgba(255,255,255,0.1);
+  background-color: rgba(255,255,255,0.08);
 }
 .prose-invert hr {
-  border-top-color: rgba(255,255,255,0.2);
+  border-top-color: rgba(255,255,255,0.15);
 }

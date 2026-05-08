@@ -76,7 +76,6 @@ function selectCommand(cmd) {
   showDropdown.value = false
 }
 
-// 暴露 keydown 处理方法
 defineExpose({ handleKeydown })
 </script>
 
@@ -85,13 +84,13 @@ defineExpose({ handleKeydown })
     <Teleport to="body">
       <Transition name="fade">
         <div v-if="showDropdown && matchedCommands.length > 0"
-          class="fixed z-50 bg-surface border border-border rounded-lg shadow-lg min-w-[280px] max-h-[200px] overflow-y-auto"
+          class="fixed z-50 bg-white border border-[#E8E8EC] rounded-md min-w-[280px] max-h-[200px] overflow-y-auto"
           :style="{
             left: dropdownStyle.left + 'px',
             top: dropdownStyle.top + 'px'
           }"
         >
-          <div class="px-3 py-2 text-xs text-muted border-b border-border-subtle">
+          <div class="px-3 py-2 text-[11px] text-[#9CA3AF] border-b border-[#ECECF0]">
             可用命令 (↑/↓ 选择，Enter 确认)
           </div>
           <div
@@ -100,14 +99,14 @@ defineExpose({ handleKeydown })
             @click="selectCommand(cmd)"
             :class="[
               'px-4 py-2 cursor-pointer transition-colors',
-              selectedIndex === idx ? 'bg-accent-dim' : 'hover:bg-surface-raised'
+              selectedIndex === idx ? 'bg-[#F0F1FE]' : 'hover:bg-[#F6F7FA]'
             ]"
           >
-            <div class="text-sm font-medium text-primary">
-              <span class="text-accent">/{{ cmd.key }}</span>
-              <span class="text-secondary ml-2">- {{ cmd.title }}</span>
+            <div class="text-[13px] font-medium text-[#2D2D35]">
+              <span class="text-[#5B6AD7]">/{{ cmd.key }}</span>
+              <span class="text-[#6B6B78] ml-2">- {{ cmd.title }}</span>
             </div>
-            <div class="text-xs text-muted mt-0.5">{{ cmd.description }}</div>
+            <div class="text-[12px] text-[#9CA3AF] mt-0.5">{{ cmd.description }}</div>
           </div>
         </div>
       </Transition>
@@ -132,3 +131,8 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+.fade-enter-active, .fade-leave-active { transition: opacity 0.15s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+</style>

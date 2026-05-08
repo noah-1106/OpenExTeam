@@ -34,39 +34,35 @@ function select(item) {
     <Transition name="fade">
       <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center">
         <div class="absolute inset-0 bg-black/30" @click="$emit('close')"></div>
-        <div class="relative bg-surface rounded-xl shadow-xl border border-border w-full max-w-md mx-4">
-          <!-- 头部 -->
-          <div class="px-5 py-4 border-b border-border-subtle">
-            <h3 class="text-base font-semibold text-primary">{{ title }}</h3>
+        <div class="relative bg-white rounded-md border border-[#E8E8EC] w-full max-w-md mx-4">
+          <div class="px-5 py-3 border-b border-[#ECECF0]">
+            <h3 class="text-[14px] font-semibold text-[#2D2D35]">{{ title }}</h3>
           </div>
-          <!-- 搜索 -->
-          <div class="px-5 py-3 border-b border-border-subtle">
+          <div class="px-5 py-3 border-b border-[#ECECF0]">
             <input
               v-model="search"
               type="text"
               placeholder="搜索..."
-              class="w-full px-3 py-2 rounded-lg border border-border text-sm bg-bg focus:outline-none focus:border-accent"
+              class="w-full px-3 py-2 rounded-md border border-[#E8E8EC] text-[13px] bg-[#F6F6F8] outline-none focus:border-[#5B6AD7] focus:bg-white transition-all"
               autofocus
             />
           </div>
-          <!-- 列表 -->
           <div class="max-h-64 overflow-y-auto">
-            <div v-if="filtered.length === 0" class="px-5 py-8 text-center text-sm text-muted">
+            <div v-if="filtered.length === 0" class="px-5 py-8 text-center text-[13px] text-[#9CA3AF]">
               暂无可选项
             </div>
             <div
               v-for="item in filtered"
               :key="item.id"
               @click="select(item)"
-              class="px-5 py-3 cursor-pointer hover:bg-surface-raised transition-colors border-b border-border-subtle last:border-b-0"
+              class="px-5 py-3 cursor-pointer hover:bg-[#F6F7FA] transition-colors border-b border-[#ECECF0] last:border-b-0"
             >
-              <div class="text-sm font-medium text-primary">{{ item.name }}</div>
-              <div v-if="item.description" class="text-xs text-muted mt-0.5 truncate">{{ item.description }}</div>
+              <div class="text-[13px] font-medium text-[#2D2D35]">{{ item.name }}</div>
+              <div v-if="item.description" class="text-[12px] text-[#9CA3AF] mt-0.5 truncate">{{ item.description }}</div>
             </div>
           </div>
-          <!-- 底部 -->
-          <div class="px-5 py-3 border-t border-border-subtle flex justify-end">
-            <button @click="$emit('close')" class="px-4 py-1.5 text-sm text-secondary hover:text-primary rounded-lg hover:bg-surface-raised transition-colors">
+          <div class="px-5 py-3 border-t border-[#ECECF0] flex justify-end">
+            <button @click="$emit('close')" class="px-4 py-1.5 text-[13px] text-[#6B6B78] hover:text-[#2D2D35] rounded-md hover:bg-[#F6F7FA] transition-colors">
               取消
             </button>
           </div>

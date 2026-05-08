@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import api from '../api/client.js'
 import { createSSEConnection } from '../api/sse.js'
+import { useToast } from '../composables/useToast.js'
 
 const props = defineProps({
   jobs: { type: Array, required: true },
@@ -10,21 +11,26 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update-task', 'create-task', 'start-job'])
+const { toast } = useToast()
 
-const jobSteps = ref({}) // jobId -> steps array
+const jobSteps = ref({})
 const selectedJobId = ref(null)
 let sseHandle = null
 
 const activeJobs = computed(() => {
-  return props.jobs.filter(job => job.status === 'in-progress')
+  const active = props.jobs.filter(job => job.status === 'in-progress' || job.status === 'idle')
+  return active.sort((a, b) => {
+    if (a.status === 'in-progress' && b.status !== 'in-progress') return -1
+    if (a.status !== 'in-progress' && b.status === 'in-progress') return 1
+    return 0
+  })
 })
 
 async function loadJobSteps(jobId) {
   try {
     const data = await api.getJobSteps(jobId)
     jobSteps.value[jobId] = data.steps || []
-  } catch (e) {
-    console.error('Failed to load job steps:', e)
+  } catch {
     jobSteps.value[jobId] = []
   }
 }
@@ -33,264 +39,261 @@ function getStepsForJob(jobId) {
   return jobSteps.value[jobId] || []
 }
 
-function getTodoSteps(jobId) {
-  return getStepsForJob(jobId).filter(s => s.status === 'pending' || s.status === 'todo')
-}
-
-function getInProgressSteps(jobId) {
-  return getStepsForJob(jobId).filter(s => s.status === 'in-progress')
-}
-
-function getDoneSteps(jobId) {
-  return getStepsForJob(jobId).filter(s => s.status === 'completed' || s.status === 'done')
+function getProgress(jobId) {
+  const steps = getStepsForJob(jobId)
+  if (!steps.length) return 0
+  const done = steps.filter(s => s.status === 'completed' || s.status === 'done').length
+  return Math.round((done / steps.length) * 100)
 }
 
 function getAgentName(agentId) {
-  if (!agentId) return ''
-  const agent = props.agents.find(a => a.id === agentId)
-  if (!agent) return agentId
-  return agent.name
+  if (!agentId) return '未指定'
+  const agent = props.agents.find(a => a.id === agentId || a.id.endsWith(agentId))
+  return agent ? agent.name : agentId
 }
 
-function startWorkflow(jobId) {
-  emit('start-job', jobId)
-  setTimeout(() => loadJobSteps(jobId), 500)
+function selectJob(jobId) {
+  selectedJobId.value = jobId
+  if (!jobSteps.value[jobId]) loadJobSteps(jobId)
 }
 
-function statusLabel(status) {
+async function retryStep(jobId, stepId) {
+  try {
+    const result = await api.retryStep(jobId, stepId)
+    if (result.success) {
+      toast.success('步骤已重新执行')
+      setTimeout(() => loadJobSteps(jobId), 300)
+    } else {
+      toast.error(result.error || '重试失败')
+    }
+  } catch (err) {
+    toast.error(`重试失败：${err.message}`)
+  }
+}
+
+async function cancelJob(jobId) {
+  try {
+    await api.updateJob(jobId, { status: 'idle' })
+    toast.success('工作已停止')
+    setTimeout(() => loadJobSteps(jobId), 300)
+  } catch (err) {
+    toast.error(`停止失败：${err.message}`)
+  }
+}
+
+async function restartJob(jobId) {
+  try {
+    const data = await api.getJobSteps(jobId)
+    const steps = data.steps || []
+    for (const step of steps) {
+      await api.updateJobStep(step.id, { status: 'pending' })
+    }
+    await api.updateJob(jobId, { status: 'idle' })
+    emit('start-job', jobId)
+    toast.success('工作已重新启动')
+  } catch (err) {
+    toast.error(`重新执行失败：${err.message}`)
+  }
+}
+
+function stepStatusClass(status) {
   switch (status) {
-    case 'pending': return '等待中'
-    case 'in-progress': return '进行中'
-    case 'completed': return '已完成'
-    case 'error': return '错误'
+    case 'pending': case 'todo': return 'pending'
+    case 'in-progress': return 'running'
+    case 'completed': case 'done': return 'done'
+    case 'error': return 'error'
+    default: return 'pending'
+  }
+}
+
+function stepStatusLabel(status) {
+  switch (status) {
+    case 'pending': case 'todo': return '待执行'
+    case 'in-progress': return '执行中'
+    case 'completed': case 'done': return '已完成'
+    case 'error': return '失败'
     default: return status
   }
 }
 
-function getStepTypeLabel(type) {
-  return type === 'excard' ? 'ExCard' : '任务'
-}
-
-function selectJob(jobId) {
-  if (selectedJobId.value === jobId) {
-    selectedJobId.value = null
-  } else {
-    selectedJobId.value = jobId
-    if (!jobSteps.value[jobId]) {
-      loadJobSteps(jobId)
-    }
-  }
-}
-
-// SSE event handling for real-time updates
 function connectSSE() {
   if (sseHandle) sseHandle.close()
-
   sseHandle = createSSEConnection({
-    workflow_started: (e) => {
-      const d = JSON.parse(e.data)
-      console.log('[Board] Workflow started:', d)
-      setTimeout(() => loadJobSteps(d.jobId), 100)
-    },
-
-    workflow_step_advanced: (e) => {
-      const d = JSON.parse(e.data)
-      console.log('[Board] Workflow step advanced:', d)
-      setTimeout(() => loadJobSteps(d.jobId), 100)
-    },
-
-    workflow_completed: (e) => {
-      const d = JSON.parse(e.data)
-      console.log('[Board] Workflow completed:', d)
-      setTimeout(() => loadJobSteps(d.jobId), 100)
-    },
-
-    workflow_error: (e) => {
-      const d = JSON.parse(e.data)
-      console.log('[Board] Workflow error:', d)
-      setTimeout(() => loadJobSteps(d.jobId), 100)
-    },
+    workflow_started: (e) => { setTimeout(() => loadJobSteps(JSON.parse(e.data).jobId), 100) },
+    workflow_step_advanced: (e) => { setTimeout(() => loadJobSteps(JSON.parse(e.data).jobId), 100) },
+    workflow_completed: (e) => { setTimeout(() => loadJobSteps(JSON.parse(e.data).jobId), 100) },
+    workflow_error: (e) => { setTimeout(() => loadJobSteps(JSON.parse(e.data).jobId), 100) },
+    workflow_retry: (e) => { setTimeout(() => loadJobSteps(JSON.parse(e.data).jobId), 100) },
   })
 }
 
 onMounted(() => {
   connectSSE()
-  activeJobs.value.forEach(job => {
-    loadJobSteps(job.id)
-  })
+  const inProgress = props.jobs.find(j => j.status === 'in-progress')
+  if (inProgress) selectJob(inProgress.id)
 })
 
 onUnmounted(() => {
-  if (sseHandle) {
-    sseHandle.close()
-    sseHandle = null
-  }
+  if (sseHandle) { sseHandle.close(); sseHandle = null }
 })
 
-// Watch for changes to active jobs and load steps
-watch(activeJobs, (newJobs) => {
-  newJobs.forEach(job => {
-    if (!jobSteps.value[job.id]) {
-      loadJobSteps(job.id)
-    }
+watch(() => props.jobs, (newJobs) => {
+  if (selectedJobId.value && !newJobs.find(j => j.id === selectedJobId.value)) {
+    selectedJobId.value = null
+  }
+  newJobs.filter(j => j.status === 'in-progress').forEach(job => {
+    if (!jobSteps.value[job.id]) loadJobSteps(job.id)
   })
 }, { deep: true })
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
-      <div>
-        <h2 class="text-xl font-bold text-primary">看板</h2>
-        <p class="text-sm text-secondary mt-0.5">
-          {{ activeJobs.length }} 个工作正在执行
-        </p>
+  <div class="h-full flex gap-0">
+    <!-- 左侧：工作列表 -->
+    <div class="w-[280px] flex-shrink-0 flex flex-col bg-white border-r border-[#E8E8EC]">
+      <div class="px-5 py-3 border-b border-[#ECECF0]">
+        <h2 class="text-[14px] font-semibold text-[#2D2D35]">执行中</h2>
+        <p class="text-[12px] text-[#9CA3AF] mt-0.5">工作流进度</p>
+      </div>
+
+      <div v-if="activeJobs.length === 0" class="flex-1 flex flex-col items-center justify-center text-[#9CA3AF]">
+        <svg class="w-10 h-10 text-[#C5C9D3] mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
+        </svg>
+        <div class="text-[13px] font-medium">暂无工作</div>
+        <div class="text-[11px] mt-0.5">在「工作」页面创建并启动工作</div>
+      </div>
+
+      <div v-else class="flex-1 overflow-y-auto py-2 px-3 space-y-1">
+        <div
+          v-for="job in activeJobs"
+          :key="job.id"
+          @click="selectJob(job.id)"
+          :class="[
+            'p-3 rounded-md cursor-pointer transition-all duration-150 border',
+            selectedJobId === job.id
+              ? 'bg-[#F0F1FE] border-[#C4CDF0]'
+              : 'bg-white border-transparent hover:bg-[#F6F7FA] hover:border-[#E8E8EC]'
+          ]"
+        >
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[13px] font-semibold text-[#2D2D35] truncate">{{ job.title }}</span>
+            <span :class="[
+              'text-[11px] px-1.5 py-0.5 rounded font-medium',
+              job.status === 'in-progress' ? 'bg-[#E0E3FA] text-[#5B6AD7]' : 'bg-[#F0F0F4] text-[#6B6B78]'
+            ]">{{ job.status === 'in-progress' ? '执行中' : '待执行' }}</span>
+          </div>
+          <div v-if="getStepsForJob(job.id).length > 0" class="mt-2">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-[11px] text-[#9CA3AF]">{{ getProgress(job.id) }}%</span>
+              <span class="text-[11px] text-[#9CA3AF]">{{ getStepsForJob(job.id).filter(s => s.status === 'completed' || s.status === 'done').length }}/{{ getStepsForJob(job.id).length }}</span>
+            </div>
+            <div class="h-1 bg-[#F0F0F4] rounded-full overflow-hidden">
+              <div class="h-full rounded-full transition-all duration-500" :class="job.status === 'in-progress' ? 'bg-[#5B6AD7]' : 'bg-[#C5C9D3]'" :style="{ width: getProgress(job.id) + '%' }" />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto">
-      <!-- 如果有正在执行的工作，先显示工作选择器 -->
-      <div v-if="activeJobs.length > 0" class="mb-6">
-        <h3 class="text-sm font-semibold text-secondary mb-3">正在执行的工作</h3>
-        <div class="flex flex-wrap gap-2">
-          <button v-for="job in activeJobs" :key="job.id"
-                  @click="selectJob(job.id)"
-                  :class="['px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border',
-                          selectedJobId === job.id
-                            ? 'bg-accent text-white border-accent shadow-sm'
-                            : 'bg-surface text-secondary border-border-subtle hover:border-border']">
-            {{ job.title }}
-          </button>
-        </div>
+    <!-- 右侧：时间线 -->
+    <div class="flex-1 bg-[#F6F6F8] overflow-hidden flex flex-col">
+      <div v-if="!selectedJobId" class="flex-1 flex flex-col items-center justify-center text-[#9CA3AF]">
+        <svg class="w-10 h-10 mb-3 text-[#C5C9D3]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
+        </svg>
+        <div class="text-[13px]">选择左侧工作查看执行流程</div>
       </div>
 
-      <!-- 看板内容区域 -->
-      <div v-if="selectedJobId" class="bg-surface rounded-xl border border-border-subtle shadow-xs overflow-hidden">
+      <template v-else>
         <!-- 工作标题栏 -->
-        <div class="px-5 py-4 border-b border-border-subtle flex items-center justify-between bg-accent/5">
+        <div class="px-6 py-3 bg-white border-b border-[#ECECF0] flex items-center justify-between flex-shrink-0">
           <div>
-            <h3 class="font-semibold text-primary">
-              {{ (props.jobs.find(j => j.id === selectedJobId))?.title || '工作' }}
-            </h3>
-            <p class="text-xs text-muted mt-1">
-              {{ getStepsForJob(selectedJobId).length }} 个步骤
-            </p>
+            <h3 class="text-[14px] font-bold text-[#2D2D35]">{{ (props.jobs.find(j => j.id === selectedJobId))?.title || '工作' }}</h3>
+            <p class="text-[11px] text-[#9CA3AF] mt-0.5">{{ getStepsForJob(selectedJobId).length }} 个步骤 · {{ getProgress(selectedJobId) }}% 完成</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="h-1.5 w-28 bg-[#F0F0F4] rounded-full overflow-hidden">
+              <div class="h-full rounded-full bg-[#5B6AD7] transition-all duration-500" :style="{ width: getProgress(selectedJobId) + '%' }" />
+            </div>
+            <button v-if="(props.jobs.find(j => j.id === selectedJobId))?.status === 'in-progress'"
+              @click="cancelJob(selectedJobId)"
+              class="px-3 py-1.5 text-[12px] font-medium text-[#C97A7A] bg-[#FDF0F0] rounded hover:bg-[#F5DEDE] transition-colors"
+            >停止</button>
+            <button v-else-if="(props.jobs.find(j => j.id === selectedJobId))?.status === 'done'"
+              @click="restartJob(selectedJobId)"
+              class="px-3 py-1.5 text-[12px] font-medium text-white bg-[#5B6AD7] rounded hover:bg-[#4A58C0] transition-colors"
+            >重新执行</button>
           </div>
         </div>
 
-        <!-- 看板三列布局 -->
-        <div class="grid grid-cols-3 gap-0">
-          <!-- Todo 列 -->
-          <div class="border-r border-border-subtle p-4 bg-gray-50/30">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="w-2 h-2 rounded-full bg-gray-400"></span>
-              <span class="text-sm font-semibold text-secondary">待执行</span>
-              <span class="text-xs text-muted ml-auto">{{ getTodoSteps(selectedJobId).length }}</span>
-            </div>
-            <div class="space-y-3">
-              <div v-for="step in getTodoSteps(selectedJobId)" :key="step.id"
-                   class="bg-white rounded-lg border border-border-subtle p-3 shadow-xs hover:shadow-sm transition-shadow">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">
-                    步骤 {{ getStepsForJob(selectedJobId).indexOf(step) + 1 }}
-                  </span>
-                  <span :class="['text-xs px-1.5 py-0.5 rounded font-medium',
-                                (step.step_type || step.stepType) === 'excard' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700']">
-                    {{ getStepTypeLabel(step.step_type || step.stepType) }}
-                  </span>
-                </div>
-                <div class="text-sm font-medium text-primary mb-1">{{ step.title }}</div>
-                <div v-if="step.description" class="text-xs text-muted mb-2">{{ step.description }}</div>
-                <div v-if="step.agent" class="text-xs text-accent">
-                  {{ getAgentName(step.agent) }}
-                </div>
-              </div>
-              <div v-if="getTodoSteps(selectedJobId).length === 0"
-                   class="py-8 text-center text-xs text-muted">
-                暂无数步骤
-              </div>
-            </div>
+        <!-- 时间线 -->
+        <div class="flex-1 overflow-y-auto p-6">
+          <div v-if="getStepsForJob(selectedJobId).length === 0" class="flex items-center justify-center h-full text-[#9CA3AF] text-[13px]">
+            此工作暂无步骤
           </div>
 
-          <!-- In Progress 列 -->
-          <div class="border-r border-border-subtle p-4 bg-blue-50/30">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="w-2 h-2 rounded-full bg-accent animate-pulse"></span>
-              <span class="text-sm font-semibold text-secondary">执行中</span>
-              <span class="text-xs text-muted ml-auto">{{ getInProgressSteps(selectedJobId).length }}</span>
-            </div>
-            <div class="space-y-3">
-              <div v-for="step in getInProgressSteps(selectedJobId)" :key="step.id"
-                   class="bg-white rounded-lg border border-accent/50 p-3 shadow-sm ring-1 ring-accent/20">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
-                    步骤 {{ getStepsForJob(selectedJobId).indexOf(step) + 1 }}
-                  </span>
-                  <span :class="['text-xs px-1.5 py-0.5 rounded font-medium',
-                                (step.step_type || step.stepType) === 'excard' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700']">
-                    {{ getStepTypeLabel(step.step_type || step.stepType) }}
-                  </span>
-                </div>
-                <div class="text-sm font-medium text-primary mb-1">{{ step.title }}</div>
-                <div v-if="step.description" class="text-xs text-muted mb-2">{{ step.description }}</div>
-                <div v-if="step.agent" class="text-xs text-accent">
-                  {{ getAgentName(step.agent) }}
-                </div>
-              </div>
-              <div v-if="getInProgressSteps(selectedJobId).length === 0"
-                   class="py-8 text-center text-xs text-muted">
-                暂无数步骤
-              </div>
-            </div>
-          </div>
+          <div v-else class="relative pl-6 max-w-[640px] mx-auto">
+            <div class="absolute left-[9px] top-0 bottom-0 w-[2px] bg-[#F0F0F4]"></div>
 
-          <!-- Done 列 -->
-          <div class="p-4 bg-green-50/30">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="w-2 h-2 rounded-full bg-green-500"></span>
-              <span class="text-sm font-semibold text-secondary">已完成</span>
-              <span class="text-xs text-muted ml-auto">{{ getDoneSteps(selectedJobId).length }}</span>
-            </div>
-            <div class="space-y-3">
-              <div v-for="step in getDoneSteps(selectedJobId)" :key="step.id"
-                   class="bg-white rounded-lg border border-green-200 p-3 shadow-xs opacity-90">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">
-                    步骤 {{ getStepsForJob(selectedJobId).indexOf(step) + 1 }}
-                  </span>
-                  <span :class="['text-xs px-1.5 py-0.5 rounded font-medium',
-                                (step.step_type || step.stepType) === 'excard' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700']">
-                    {{ getStepTypeLabel(step.step_type || step.stepType) }}
-                  </span>
-                </div>
-                <div class="text-sm font-medium text-primary mb-1">{{ step.title }}</div>
-                <div v-if="step.description" class="text-xs text-muted mb-2">{{ step.description }}</div>
-                <div v-if="step.agent" class="text-xs text-accent">
-                  {{ getAgentName(step.agent) }}
-                </div>
+            <div v-for="(step, idx) in getStepsForJob(selectedJobId)" :key="step.id" class="relative mb-5 last:mb-0">
+              <div :class="[
+                'absolute -left-6 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border-2 z-10',
+                stepStatusClass(step.status) === 'done' ? 'bg-[#5FA88F] border-[#5FA88F] text-white' :
+                stepStatusClass(step.status) === 'running' ? 'bg-[#5B6AD7] border-[#5B6AD7] text-white animate-pulse' :
+                stepStatusClass(step.status) === 'error' ? 'bg-[#C97A7A] border-[#C97A7A] text-white' :
+                'bg-white border-[#C5C9D3] text-[#9CA3AF]'
+              ]">
+                <svg v-if="stepStatusClass(step.status) === 'done'" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                <svg v-else-if="stepStatusClass(step.status) === 'error'" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span v-else>{{ idx + 1 }}</span>
               </div>
-              <div v-if="getDoneSteps(selectedJobId).length === 0"
-                   class="py-8 text-center text-xs text-muted">
-                暂无数步骤
+
+              <div :class="[
+                'rounded-md border p-3.5 transition-all duration-150',
+                stepStatusClass(step.status) === 'done' ? 'bg-[#EDF7F3] border-[#B8DFCC]' :
+                stepStatusClass(step.status) === 'running' ? 'bg-[#F0F1FE] border-[#C4CDF0]' :
+                stepStatusClass(step.status) === 'error' ? 'bg-[#FDF0F0] border-[#F0C8C8]' :
+                'bg-white border-[#E8E8EC]'
+              ]">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-[13px] font-semibold text-[#2D2D35]">{{ step.title }}</span>
+                  <span :class="[
+                    'text-[11px] px-1.5 py-0.5 rounded font-medium',
+                    stepStatusClass(step.status) === 'done' ? 'bg-[#D4E8DD] text-[#4E917A]' :
+                    stepStatusClass(step.status) === 'running' ? 'bg-[#E0E3FA] text-[#5B6AD7]' :
+                    stepStatusClass(step.status) === 'error' ? 'bg-[#F5DEDE] text-[#C97A7A]' :
+                    'bg-[#F0F0F4] text-[#6B6B78]'
+                  ]">{{ stepStatusLabel(step.status) }}</span>
+                  <span v-if="(step.step_type || step.stepType) === 'excard'" class="text-[11px] px-1.5 py-0.5 rounded bg-[#F5F0FA] text-[#A67EC5] font-medium">ExCard</span>
+                </div>
+
+                <div v-if="step.description" class="text-[13px] text-[#6B6B78] mb-2">{{ step.description }}</div>
+
+                <div class="flex items-center gap-1.5 text-[11px] text-[#9CA3AF]">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                  </svg>
+                  <span>{{ getAgentName(step.agent) }}</span>
+                </div>
+
+                <div v-if="stepStatusClass(step.status) === 'error'" class="mt-2 pt-2 border-t border-[#F0C8C8]">
+                  <button @click="retryStep(selectedJobId, step.id)" class="text-[12px] font-medium text-[#C97A7A] hover:text-[#B86565] flex items-center gap-1 transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+                    </svg>
+                    重试此步骤
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- 如果没有选择工作，显示提示 -->
-      <div v-else-if="activeJobs.length > 0" class="flex flex-col items-center justify-center py-24 text-muted">
-        <div class="text-5xl mb-3">📋</div>
-        <div class="text-base font-medium">选择上方正在执行的工作查看进度</div>
-      </div>
-
-      <!-- 如果没有正在执行的工作 -->
-      <div v-else class="flex flex-col items-center justify-center py-24 text-muted">
-        <div class="text-5xl mb-3">📋</div>
-        <div class="text-base font-medium">当前没有正在执行的工作</div>
-        <div class="text-sm mt-1">在「工作」tab中创建并启动工作</div>
-      </div>
+      </template>
     </div>
   </div>
 </template>

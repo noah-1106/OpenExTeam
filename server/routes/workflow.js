@@ -2,7 +2,7 @@
  * Workflow API Routes - 工作流 API 路由
  */
 
-const { startWorkflow, getWorkflowStatus } = require('../services/workflow');
+const { startWorkflow, getWorkflowStatus, retryStep } = require('../services/workflow');
 const { validators, validateWorkflowStart } = require('../validation');
 
 function setupWorkflowRoutes(app) {
@@ -35,6 +35,20 @@ function setupWorkflowRoutes(app) {
 
     const status = getWorkflowStatus(jobId);
     res.json(status);
+  });
+
+  app.post('/api/workflow/retry-step', (req, res) => {
+    const { jobId, stepId } = req.body;
+    if (!jobId || !stepId) {
+      return res.status(400).json({ error: 'jobId and stepId required' });
+    }
+
+    const result = retryStep(jobId, stepId);
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
   });
 }
 

@@ -17,7 +17,6 @@ const emit = defineEmits(['close', 'create'])
 const isOpen = computed(() => props.show)
 const validationErrors = ref({})
 
-// 表单数据
 const form = ref({
   id: '',
   name: '',
@@ -26,7 +25,6 @@ const form = ref({
   agent: props.agentId,
 })
 
-// 解析提议格式
 function parseProposal(text) {
   const lines = text.split('\n')
   let inMarkdown = false
@@ -36,14 +34,9 @@ function parseProposal(text) {
   let agentFromProposal = props.agentId
   let fullMarkdown = ''
 
-  console.log('[ExcardProposalModal] 开始解析:', text.substring(0, 200))
-
-  // 先检查是否是 [EXCARD_PROPOSAL] 键值对格式
   let isKeyValueFormat = false
-  // 再检查是否是 # EXCARD_PROPOSAL Markdown 标题格式
   let isMarkdownFormat = false
 
-  // 第一次扫描确定格式
   for (let line of lines) {
     if (line.trim().startsWith('[EXCARD_PROPOSAL]')) {
       isKeyValueFormat = true
@@ -55,9 +48,6 @@ function parseProposal(text) {
     }
   }
 
-  console.log('[ExcardProposalModal] 格式检测:', { isKeyValueFormat, isMarkdownFormat })
-
-  // 第二次扫描提取内容
   if (isKeyValueFormat) {
     for (let line of lines) {
       const trimmed = line.trim()
@@ -82,14 +72,10 @@ function parseProposal(text) {
       }
     }
     fullMarkdown = markdownLines.join('\n').trim()
-    console.log('[ExcardProposalModal] 键值对格式解析结果:', { nameFromProposal, descFromProposal, markdownLength: fullMarkdown.length })
   } else if (isMarkdownFormat) {
-    // 直接把整个内容作为 markdown
     fullMarkdown = text
-    // 尝试从内容中提取名称和描述
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
-      // 尝试从内容中找卡片名称
       if (!nameFromProposal && line.includes('name') && line.includes('|')) {
         const parts = line.split('|').map(p => p.trim()).filter(p => p)
         if (parts.length === 2 && parts[0] === 'name') {
@@ -97,7 +83,6 @@ function parseProposal(text) {
         }
       }
       if (!descFromProposal && line.includes('## 卡片目的') && i + 2 < lines.length) {
-        // 取卡片目的下面的第一段
         let descBuffer = []
         for (let j = i + 1; j < lines.length; j++) {
           if (lines[j].trim().startsWith('---') || lines[j].trim().startsWith('##')) {
@@ -112,7 +97,6 @@ function parseProposal(text) {
     }
   }
 
-  // 设置默认值
   if (!nameFromProposal) {
     nameFromProposal = 'new-excard-' + Date.now().toString(36)
   }
@@ -120,7 +104,6 @@ function parseProposal(text) {
     descFromProposal = '通过 Agent 提案创建的 ExCard'
   }
   if (!fullMarkdown) {
-    // 如果没有提取到 markdown，尝试使用全部文本（去除头部）
     const startIdx = text.indexOf('[EXCARD_PROPOSAL]')
     if (startIdx >= 0) {
       fullMarkdown = text.substring(startIdx + '[EXCARD_PROPOSAL]'.length).trim()
@@ -128,8 +111,6 @@ function parseProposal(text) {
       fullMarkdown = text
     }
   }
-
-  console.log('[ExcardProposalModal] 最终解析结果:', { nameFromProposal, descFromProposal, fullMarkdownLength: fullMarkdown.length })
 
   return {
     name: nameFromProposal,
@@ -139,7 +120,6 @@ function parseProposal(text) {
   }
 }
 
-// 当 props 变化时解析
 watch(() => props.rawText, (newText) => {
   if (newText) {
     const parsed = parseProposal(newText)
@@ -153,7 +133,6 @@ watch(() => props.rawText, (newText) => {
   }
 }, { immediate: true })
 
-// 生成一个简单的 ID
 function generateId(name) {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   const randomStr = Math.random().toString(36).substring(2, 8)
@@ -193,61 +172,58 @@ function clearValidationError(field) {
 <template>
   <Teleport to="body">
     <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="handleClose"></div>
-      <div class="relative bg-surface rounded-xl shadow-xl border border-border w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col animate-fade-in">
-        <!-- Header -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
+      <div class="absolute inset-0 bg-black/30" @click="handleClose"></div>
+      <div class="relative bg-white rounded-md border border-[#E8E8EC] w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col animate-fade-in">
+        <div class="flex items-center justify-between px-5 py-3 border-b border-[#ECECF0]">
           <div>
-            <h3 class="font-semibold text-primary">{{ props.isModifyMode ? '修改 ExCard' : '创建 ExCard' }}</h3>
-            <p class="text-xs text-muted mt-1">Agent 提议{{ props.isModifyMode ? '修改' : '创建' }}一个 ExCard，你可以修改后确认</p>
+            <h3 class="text-[15px] font-semibold text-[#2D2D35]">{{ props.isModifyMode ? '修改 ExCard' : '创建 ExCard' }}</h3>
+            <p class="text-[12px] text-[#9CA3AF] mt-0.5">Agent 提议{{ props.isModifyMode ? '修改' : '创建' }}一个 ExCard，你可以修改后确认</p>
           </div>
-          <button @click="handleClose" class="text-muted hover:text-primary text-xl leading-none">×</button>
+          <button @click="handleClose" class="text-[#9CA3AF] hover:text-[#2D2D35] transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l18 12" />
+            </svg>
+          </button>
         </div>
 
-        <!-- Content -->
-        <div class="flex-1 overflow-y-auto p-6 space-y-4">
-          <div v-if="!props.isModifyMode">
-            <label class="block text-sm font-medium text-primary mb-1.5">ExCard 名称 *</label>
+        <div class="flex-1 overflow-y-auto p-5 space-y-4">
+          <div>
+            <label class="block text-[13px] font-medium text-[#2D2D35] mb-1.5">ExCard 名称 *</label>
             <input v-model="form.name" @input="clearValidationError('name')" type="text" placeholder="输入名称"
-              :class="['w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm outline-none focus:ring-2 focus:ring-accent focus:border-transparent', validationErrors.name ? 'border-red-400' : 'border-border']"
+              :class="['w-full px-3 py-2 border rounded-md text-[13px] outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all', validationErrors.name ? 'border-[#C97A7A]' : 'border-[#E8E8EC]']"
             />
           </div>
-          <div v-else>
-            <label class="block text-sm font-medium text-primary mb-1.5">ExCard 名称 *</label>
-            <input v-model="form.name" @input="clearValidationError('name')" type="text" placeholder="输入名称"
-              :class="['w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm outline-none focus:ring-2 focus:ring-accent focus:border-transparent', validationErrors.name ? 'border-red-400' : 'border-border']"
-            />
-            <p class="text-xs text-muted mt-1">正在修改: {{ props.targetExcardId }}</p>
+          <div v-if="props.isModifyMode">
+            <p class="text-[11px] text-[#9CA3AF]">正在修改: {{ props.targetExcardId }}</p>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-primary mb-1.5">描述</label>
+            <label class="block text-[13px] font-medium text-[#2D2D35] mb-1.5">描述</label>
             <textarea v-model="form.description" rows="2" placeholder="简要描述这个 ExCard 的用途"
-              class="w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+              class="w-full px-3 py-2 border border-[#E8E8EC] rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all"
             ></textarea>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-primary mb-1.5">绑定 Agent</label>
+            <label class="block text-[13px] font-medium text-[#2D2D35] mb-1.5">绑定 Agent</label>
             <input v-model="form.agent" type="text" placeholder="Agent ID" readonly
-              class="w-full px-3 py-2 bg-gray-50 border border-border rounded-lg text-sm outline-none text-muted"
+              class="w-full px-3 py-2 bg-[#F6F7FA] border border-[#E8E8EC] rounded-md text-[13px] outline-none text-[#9CA3AF]"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-primary mb-1.5">Markdown 内容 *</label>
+            <label class="block text-[13px] font-medium text-[#2D2D35] mb-1.5">Markdown 内容 *</label>
             <textarea v-model="form.markdown" @input="clearValidationError('markdown')" rows="10" placeholder="# ExCard 标题&#10;&#10;## 任务描述&#10;..."
-              :class="['w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-accent focus:border-transparent font-mono', validationErrors.markdown ? 'border-red-400' : 'border-border']"
+              :class="['w-full px-3 py-2 border rounded-md text-[13px] resize-none outline-none focus:border-[#5B6AD7] focus:shadow-[0_0_0_3px_rgba(91, 106, 215, 0.08)] transition-all font-mono', validationErrors.markdown ? 'border-[#C97A7A]' : 'border-[#E8E8EC]']"
             ></textarea>
           </div>
         </div>
 
-        <!-- Footer -->
-        <div class="flex justify-end gap-3 px-6 py-4 border-t border-border-subtle">
-          <button @click="handleClose" class="px-4 py-2 text-sm text-secondary hover:text-primary transition-colors">
+        <div class="flex justify-end gap-3 px-5 py-3 border-t border-[#ECECF0]">
+          <button @click="handleClose" class="px-4 py-2 text-[13px] text-[#6B6B78] hover:text-[#2D2D35] transition-colors">
             取消
           </button>
-          <button @click="handleCreate" class="px-4 py-2 text-sm bg-accent text-white rounded-lg font-medium hover:bg-accent-hover transition-colors">
+          <button @click="handleCreate" class="px-4 py-2 text-[13px] bg-[#5B6AD7] text-white rounded-md font-medium hover:bg-[#4A58C0] transition-colors">
             创建 ExCard
           </button>
         </div>
